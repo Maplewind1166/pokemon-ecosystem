@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pokemon Card PSA Decision Tool</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f8f9fb;
+    --card: #ffffff;
+    --border: #e1e5ec;
+    --text: #1a1f2e;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --good: #16a34a;
+    --good-soft: #dcfce7;
+    --bad: #dc2626;
+    --bad-soft: #fee2e2;
+    --warn: #d97706;
+    --warn-soft: #fef3c7;
+    --shadow: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.06);
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  header h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  header h1 .subtitle { color: var(--muted); font-weight: 400; margin-left: 10px; font-size: 13px; }
+  .header-actions { display: flex; gap: 8px; }
+
+  .layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+  .card h3 { margin: 18px 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+  /* Search */
+  .search-row { display: flex; gap: 8px; }
+  .search-row input { flex: 1; }
+  input[type="text"], input[type="number"], input[type="password"] {
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font: inherit;
+    background: #fff;
+    color: var(--text);
+    width: 100%;
+  }
+  input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  button {
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    transition: all .12s;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  button.primary:hover { background: #1d4ed8; color: white; }
+  button.ghost { border-color: transparent; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .result-tile {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    background: #fff;
+    transition: all .12s;
+    text-align: center;
+  }
+  .result-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .result-tile img { max-width: 100%; height: 160px; object-fit: contain; border-radius: 4px; }
+  .result-tile .rt-name { font-size: 12px; font-weight: 500; margin-top: 6px; line-height: 1.3; }
+  .result-tile .rt-set { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--muted); }
+  .loading { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Card detail */
+  .card-detail { display: grid; grid-template-columns: 220px 1fr; gap: 18px; }
+  @media (max-width: 700px) { .card-detail { grid-template-columns: 1fr; } }
+  .card-image-wrap img { width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+  .card-meta h2 { font-size: 18px; margin: 0 0 6px; }
+  .card-meta .meta-row { color: var(--muted); margin-bottom: 4px; }
+  .card-meta a { color: var(--accent); text-decoration: none; font-size: 12px; }
+  .card-meta a:hover { text-decoration: underline; }
+  .pill { display: inline-block; padding: 2px 8px; background: var(--accent-soft); color: var(--accent); border-radius: 999px; font-size: 11px; font-weight: 500; margin-right: 6px; }
+
+  /* Price grid */
+  .price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .price-field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; display: block; margin-bottom: 4px; }
+  .price-field .badge { font-size: 10px; padding: 1px 5px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
+  .badge.auto { background: var(--good-soft); color: var(--good); }
+  .badge.manual { background: var(--warn-soft); color: var(--warn); }
+  .input-prefix { position: relative; }
+  .input-prefix::before { content: "$"; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .input-prefix input { padding-left: 24px; }
+
+  /* Probability slider */
+  .slider-row { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; }
+  .slider-row input[type=range] { width: 100%; }
+  .slider-display { font-size: 28px; font-weight: 700; color: var(--accent); min-width: 90px; text-align: right; }
+
+  /* Decision card — five tiers */
+  .big-rec { font-size: 32px; font-weight: 700; padding: 16px; text-align: center; border-radius: 8px; margin-bottom: 16px; letter-spacing: .03em; border: 2px solid transparent; }
+  .big-rec.STRONG-GRADE { background: #c6efce; color: #006100; border-color: #006100; }
+  .big-rec.WEAK-GRADE   { background: var(--good-soft); color: var(--good); }
+  .big-rec.TOSS-UP      { background: var(--warn-soft); color: var(--warn); }
+  .big-rec.WEAK-SELL    { background: var(--bad-soft); color: var(--bad); }
+  .big-rec.STRONG-SELL  { background: #fee2e2; color: #7f1d1d; border-color: #7f1d1d; }
+  /* Legacy 3-state still used in some places */
+  .big-rec.GRADE { background: var(--good-soft); color: var(--good); }
+  .big-rec.SELL  { background: var(--bad-soft); color: var(--bad); }
+  .big-rec.TOSS  { background: var(--warn-soft); color: var(--warn); }
+  .rec-sub { font-size: 14px; font-weight: 400; color: inherit; opacity: .85; display: block; margin-top: 4px; }
+
+  /* Tier pill in summary table */
+  .tier-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .tier-pill.STRONG-GRADE { background: #c6efce; color: #006100; }
+  .tier-pill.WEAK-GRADE   { background: var(--good-soft); color: var(--good); }
+  .tier-pill.TOSS-UP      { background: var(--warn-soft); color: var(--warn); }
+  .tier-pill.WEAK-SELL    { background: var(--bad-soft); color: var(--bad); }
+  .tier-pill.STRONG-SELL  { background: #fee2e2; color: #7f1d1d; }
+
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .metric { background: var(--bg); padding: 10px 12px; border-radius: 6px; }
+  .metric .m-label { font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 600; letter-spacing: .04em; }
+  .metric .m-value { font-size: 18px; font-weight: 600; margin-top: 2px; }
+  .metric.good .m-value { color: var(--good); }
+  .metric.bad .m-value { color: var(--bad); }
+  .metric .m-help { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.3; }
+
+  .interpret { font-size: 13px; color: var(--text); padding: 12px; background: var(--bg); border-left: 3px solid var(--accent); border-radius: 4px; margin: 12px 0; }
+  .interpret strong { color: var(--accent); }
+
+  canvas { max-width: 100%; }
+
+  /* Settings panel */
+  .settings-panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
+  .settings-group { margin-bottom: 18px; }
+  .settings-group h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+  .setting-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin-bottom: 8px; font-size: 13px; }
+  .setting-row label { color: var(--text); }
+  .setting-row input { width: 100px; padding: 6px 8px; }
+  .setting-row .help { display: block; font-size: 11px; color: var(--muted); grid-column: 1; }
+
+  /* History */
+  .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .history-table th { background: var(--bg); padding: 8px; text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); }
+  .history-table td { padding: 8px; border-bottom: 1px solid var(--border); }
+  .history-table tr:hover td { background: var(--bg); }
+  .rec-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .rec-pill.GRADE { background: var(--good-soft); color: var(--good); }
+  .rec-pill.SELL { background: var(--bad-soft); color: var(--bad); }
+  .rec-pill.TOSS { background: var(--warn-soft); color: var(--warn); }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: white; padding: 10px 18px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.2); font-size: 13px; z-index: 100; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+
+  .hidden { display: none !important; }
+
+  /* Tooltip */
+  .help-icon { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); color: white; text-align: center; font-size: 10px; line-height: 14px; cursor: help; margin-left: 4px; vertical-align: middle; }
+
+  /* External lookup buttons */
+  .pc-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 500; font-size: 13px; transition: all .12s; }
+  .pc-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  /* Debug panel */
+  .debug-panel { margin-top: 10px; font-size: 12px; }
+  .debug-panel summary { cursor: pointer; color: var(--muted); padding: 4px 0; }
+  .debug-panel summary:hover { color: var(--accent); }
+  .debug-panel pre { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px; max-height: 320px; overflow: auto; font-size: 11px; line-height: 1.45; margin: 6px 0; }
+  .debug-panel .copy-btn { font-size: 11px; padding: 4px 10px; }
+  .debug-panel .err { color: var(--bad); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Pokemon PSA Decision Tool <span class="subtitle">grade or sell raw — backed by math</span></h1>
+  <div class="header-actions">
+    <button id="settings-btn">⚙ Settings</button>
+    <button id="reset-btn" class="ghost">↺ Reset card</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ============ MAIN COLUMN ============ -->
+  <div>
+    <!-- Search -->
+    <section class="card">
+      <h2>1. Find a card</h2>
+      <div class="search-row">
+        <input id="search-name" type="text" placeholder="Card name (e.g., Charizard — partial match works)" autocomplete="off">
+        <input id="search-number" type="text" placeholder="Number (optional, e.g., 125)" style="max-width: 200px;">
+        <button id="search-btn" class="primary">Search</button>
+        <button id="manual-btn" title="Skip search and type the card details yourself — useful for new promos that aren't in either database yet">+ Enter manually</button>
+      </div>
+      <div id="search-status" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
+      <div id="search-results" class="results-grid hidden"></div>
+    </section>
+
+    <!-- Card detail / prices / probability -->
+    <section id="detail-section" class="card hidden">
+      <h2>2. Confirm prices</h2>
+      <div class="card-detail">
+        <div class="card-image-wrap">
+          <img id="card-image" src="" alt="">
+        </div>
+        <div class="card-meta">
+          <h2 id="card-name"></h2>
+          <div class="meta-row" id="card-set-line"></div>
+          <div class="meta-row" id="card-rarity-line"></div>
+          <div id="card-tcg-link" style="margin-top:8px;"></div>
+
+          <h3>Prices</h3>
+          <div class="price-grid">
+            <div class="price-field">
+              <label>Raw market <span id="raw-badge" class="badge auto">auto</span></label>
+              <div class="input-prefix"><input type="number" step="0.01" id="price-raw" data-key="raw"></div>
+            </div>
+            <div class="price-field">
+              <label>PSA 10 sold <span id="psa10-badge" class="badge manual">manual</span></label>
+              <div class="input-prefix"><input type="number" step="0.01" id="price-psa10" data-key="psa10"></div>
+            </div>
+            <div class="price-field">
+              <label>PSA 9 sold <span id="psa9-badge" class="badge manual">manual</span></label>
+              <div class="input-prefix"><input type="number" step="0.01" id="price-psa9" data-key="psa9"></div>
+            </div>
+            <div class="price-field">
+              <label>PSA &lt;9 fallback <span class="badge manual">manual</span></label>
+              <div class="input-prefix"><input type="number" step="0.01" id="price-psa8" data-key="psa8"></div>
+            </div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+            <a id="pricecharting-btn" class="pc-btn" href="#" target="_blank" rel="noopener">🔎 PriceCharting</a>
+            <a id="ppt-web-btn" class="pc-btn" href="#" target="_blank" rel="noopener">📊 PSA Analysis (PokemonPriceTracker)</a>
+            <a id="ebay-sold-btn" class="pc-btn" href="#" target="_blank" rel="noopener">📦 eBay sold listings</a>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;">
+            All three open in a new tab. Take the <strong>median of the last 5 PSA sales</strong> and type each grade's price above.
+          </div>
+          <details id="debug-panel" class="debug-panel" hidden>
+            <summary>API response (debug — share if PSA auto-fetch fails)</summary>
+            <div id="debug-content"></div>
+          </details>
+
+          <h3>Your estimate of PSA-10 probability</h3>
+          <div class="slider-row">
+            <input type="range" id="p10-slider" min="0" max="100" step="1" value="20">
+            <div class="slider-display" id="p10-display">20%</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);">
+            Be skeptical of yourself. Sharp pulls 20–35%. Played edges 5–15%. Centering off → halve it.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Decision -->
+    <section id="decision-section" class="card hidden">
+      <h2>3. Decision</h2>
+      <div id="big-rec" class="big-rec"></div>
+      <div class="interpret" id="interpret"></div>
+
+      <div class="metrics-grid">
+        <div class="metric"><div class="m-label">Net if sold raw</div><div class="m-value" id="m-raw">—</div><div class="m-help">After TCGPlayer fees + shipping</div></div>
+        <div class="metric"><div class="m-label">Expected graded net</div><div class="m-value" id="m-graded">—</div><div class="m-help">Probability-weighted, after costs</div></div>
+        <div class="metric" id="m-evgain-card"><div class="m-label">EV gain from grading</div><div class="m-value" id="m-evgain">—</div><div class="m-help">Graded net minus raw net</div></div>
+        <div class="metric"><div class="m-label">Breakeven p(PSA 10)</div><div class="m-value" id="m-breakeven">—</div><div class="m-help">Time-adjusted: minimum p(10) for grading to clear capital cost</div></div>
+        <div class="metric" id="m-margin-card"><div class="m-label">Margin vs breakeven</div><div class="m-value" id="m-margin">—</div><div class="m-help">Your p(10) − breakeven p(10)</div></div>
+        <div class="metric" id="m-timeev-card"><div class="m-label">Time-adj. EV gain</div><div class="m-value" id="m-timeev">—</div><div class="m-help">After PSA turnaround discount</div></div>
+      </div>
+
+      <h3>Sensitivity to your PSA-10 estimate</h3>
+      <div style="position:relative;height:240px;"><canvas id="sensitivity-chart"></canvas></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Curve shows EV gain ($) across all possible PSA-10 probabilities. The horizontal line is zero. Where the curve crosses zero is the breakeven probability.</div>
+
+      <div style="margin-top:14px;display:flex;gap:8px;">
+        <button id="save-btn" class="primary">💾 Save Decision</button>
+        <button id="clear-btn" class="ghost">Clear card</button>
+      </div>
+    </section>
+
+    <!-- Summary -->
+    <section class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span>Decision Summary</span>
+        <span style="display:flex;gap:8px;">
+          <button id="export-csv-btn" title="Download all saved decisions as CSV">⬇ Export CSV</button>
+          <button id="clear-all-btn" class="ghost" title="Delete all saved decisions">🗑 Clear all</button>
+        </span>
+      </h2>
+      <div id="history-empty" class="empty-state">No decisions saved yet. Click <strong>Save Decision</strong> after evaluating a card to start the table.</div>
+      <div style="overflow-x:auto;">
+      <table class="history-table hidden" id="history-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Card</th>
+            <th>Set</th>
+            <th>#</th>
+            <th>Raw</th>
+            <th>PSA 10</th>
+            <th>PSA 9</th>
+            <th>p(10)</th>
+            <th>Breakeven</th>
+            <th>Time-adj EV</th>
+            <th>Decision</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ SETTINGS COLUMN ============ -->
+  <div>
+    <div class="settings-panel">
+      <h2 style="margin-top:0">Settings <span style="font-weight:400;color:var(--muted);font-size:12px;">(saved locally)</span></h2>
+
+      <div class="settings-group">
+        <h4>PSA grading costs</h4>
+        <div class="setting-row"><label>PSA fee per card<br><span class="help">Value $25 · Eco $49.99 · Reg $79.99</span></label><input type="number" step="0.01" id="s-psa-fee"></div>
+        <div class="setting-row"><label>Ship to PSA (per card)</label><input type="number" step="0.01" id="s-psa-ship-out"></div>
+        <div class="setting-row"><label>Return ship from PSA</label><input type="number" step="0.01" id="s-psa-ship-in"></div>
+        <div class="setting-row"><label>Supplies (savers, etc.)</label><input type="number" step="0.01" id="s-psa-supplies"></div>
+        <div class="setting-row"><label>Turnaround (months)</label><input type="number" step="0.1" id="s-psa-months"></div>
+      </div>
+
+      <div class="settings-group">
+        <h4>TCGPlayer selling fees</h4>
+        <div class="setting-row"><label>Marketplace commission %</label><input type="number" step="0.1" id="s-tcg-commission"></div>
+        <div class="setting-row"><label>Pro fee % (0 if not Pro)</label><input type="number" step="0.1" id="s-tcg-pro"></div>
+        <div class="setting-row"><label>Payment processing %</label><input type="number" step="0.1" id="s-tcg-pay-pct"></div>
+        <div class="setting-row"><label>Payment fixed fee $</label><input type="number" step="0.01" id="s-tcg-pay-fix"></div>
+        <div class="setting-row"><label>Raw card shipping $</label><input type="number" step="0.01" id="s-raw-ship"></div>
+        <div class="setting-row"><label>Graded card shipping $</label><input type="number" step="0.01" id="s-graded-ship"></div>
+      </div>
+
+      <div class="settings-group">
+        <h4>Probability framework</h4>
+        <div class="setting-row"><label>p(PSA 9 | not 10) %<br><span class="help">Conditional probability if it misses 10</span></label><input type="number" step="1" id="s-p9-cond"></div>
+      </div>
+
+      <div class="settings-group">
+        <h4>Decision rules</h4>
+        <div class="setting-row"><label>Min EV advantage $<br><span class="help">Don't grade unless edge exceeds this</span></label><input type="number" step="0.5" id="s-min-edge"></div>
+        <div class="setting-row"><label>Annual hurdle rate %<br><span class="help">Capital cost during PSA wait</span></label><input type="number" step="0.5" id="s-hurdle"></div>
+      </div>
+
+      <div class="settings-group">
+        <h4>API key (optional)</h4>
+        <div class="setting-row" style="grid-template-columns:1fr;">
+          <label>PokemonPriceTracker key<br><span class="help">Free at pokemonpricetracker.com — enables auto PSA prices</span></label>
+          <input type="password" id="s-ppt-key" placeholder="paste key here" style="width:100%;">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button id="save-settings" class="primary" style="flex:1;">Save settings</button>
+        <button id="reset-settings">Reset defaults</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ============================================================
+// 1. Defaults & storage
+// ============================================================
+const DEFAULTS = {
+  psaFee: 25.00,
+  psaShipOut: 3.00,
+  psaShipIn: 5.00,
+  psaSupplies: 1.00,
+  psaMonths: 8.0,
+  tcgCommission: 10.75,    // %
+  tcgPro: 0.0,
+  tcgPayPct: 2.5,
+  tcgPayFix: 0.30,
+  rawShip: 1.50,
+  gradedShip: 8.00,
+  p9Cond: 60,              // %
+  minEdge: 10.00,
+  hurdle: 10,              // %
+  pptKey: ''
+};
+const STORAGE_KEYS = { settings: 'psa_tool_settings', history: 'psa_tool_history' };
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.settings);
+    if (!raw) return { ...DEFAULTS };
+    return { ...DEFAULTS, ...JSON.parse(raw) };
+  } catch (e) { return { ...DEFAULTS }; }
+}
+function saveSettings(s) { localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(s)); }
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.history) || '[]'); }
+  catch (e) { return []; }
+}
+function saveHistory(h) { localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(h)); }
+
+let settings = loadSettings();
+let history = loadHistory();
+let currentCard = null;
+let currentPrices = { raw: null, psa10: null, psa9: null, psa8: null };
+let priceSource = { raw: 'manual', psa10: 'manual', psa9: 'manual', psa8: 'manual' };
+let sensChart = null;
+
+// ============================================================
+// 2. Math
+// ============================================================
+function tcgFeeRate() {
+  return (settings.tcgCommission + settings.tcgPro + settings.tcgPayPct) / 100;
+}
+function netFromSale(salePrice, shipping) {
+  if (salePrice == null || isNaN(salePrice)) return null;
+  return salePrice * (1 - tcgFeeRate()) - settings.tcgPayFix - shipping;
+}
+function gradingTotalCost() {
+  return settings.psaFee + settings.psaShipOut + settings.psaShipIn + settings.psaSupplies;
+}
+function compute(prices, p10pct) {
+  const p10 = p10pct / 100;
+  const q9 = settings.p9Cond / 100;
+  const p9 = (1 - p10) * q9;
+  const pLow = (1 - p10) * (1 - q9);
+
+  const netRaw = netFromSale(prices.raw, settings.rawShip);
+  const net10 = netFromSale(prices.psa10, settings.gradedShip);
+  const net9 = netFromSale(prices.psa9, settings.gradedShip);
+  const netLow = netFromSale(prices.psa8, settings.gradedShip);
+  const cost = gradingTotalCost();
+
+  if ([netRaw, net10, net9, netLow].some(v => v == null)) {
+    return { ready: false };
+  }
+
+  const expectedGraded = p10 * net10 + p9 * net9 + pLow * netLow - cost;
+  const evGain = expectedGraded - netRaw;
+
+  // Breakeven p(10) — EV only
+  const mNot10 = q9 * net9 + (1 - q9) * netLow;
+  let breakeven;
+  if (Math.abs(net10 - mNot10) < 1e-9) breakeven = null;
+  else breakeven = (netRaw + cost - mNot10) / (net10 - mNot10);
+
+  // Time-discounted EV
+  const months = settings.psaMonths;
+  const r = settings.hurdle / 100;
+  const discount = Math.pow(1 + r, months / 12);
+  const expectedGradedTime = expectedGraded / discount;
+  const timeEvGain = expectedGradedTime - netRaw;
+
+  // Time-adjusted breakeven — the p(10) at which time-discounted graded net
+  // equals raw net. Always >= the EV-only breakeven (because discount > 1).
+  // Solve: (p10*net10 + (1-p10)*mNot10 - cost) / discount = netRaw
+  //   => p10 = (netRaw*discount + cost - mNot10) / (net10 - mNot10)
+  let breakevenTime;
+  if (Math.abs(net10 - mNot10) < 1e-9) breakevenTime = null;
+  else breakevenTime = (netRaw * discount + cost - mNot10) / (net10 - mNot10);
+
+  // 5-tier recommendation, based on the time-adjusted margin (p10 - breakevenTime).
+  // Corner cases: breakeven < 0 → always grade; > 1 → never grade.
+  const marginTime = breakevenTime == null ? null : (p10 - breakevenTime);
+  function tierOf(marg, be) {
+    if (be != null && be < 0) return 'STRONG GRADE';
+    if (be != null && be > 1) return 'STRONG SELL';
+    if (marg == null) return 'TOSS-UP';
+    if (marg >= 0.20) return 'STRONG GRADE';
+    if (marg >= 0.05) return 'WEAK GRADE';
+    if (marg >  -0.05) return 'TOSS-UP';
+    if (marg >  -0.20) return 'WEAK SELL';
+    return 'STRONG SELL';
+  }
+  const tier = tierOf(marginTime, breakevenTime);
+
+  // Backwards-compat: keep old 3-state labels too
+  function recOf(advantage) {
+    if (advantage > settings.minEdge) return 'GRADE';
+    if (advantage < -settings.minEdge) return 'SELL RAW';
+    return 'TOSS-UP';
+  }
+  const rec = recOf(evGain);
+  const recTime = recOf(timeEvGain);
+
+  return {
+    ready: true,
+    p10, p9, pLow,
+    netRaw, net10, net9, netLow, cost,
+    expectedGraded, evGain,
+    breakeven, breakevenTime,
+    expectedGradedTime, timeEvGain,
+    rec, recTime, tier,
+    margin: breakeven == null ? null : p10 - breakeven,
+    marginTime
+  };
+}
+
+// ============================================================
+// 3. APIs — unified search and PSA fetch
+// ============================================================
+const PPT_BASE = 'https://www.pokemonpricetracker.com/api/v2';
+const TCG_BASE = 'https://api.pokemontcg.io/v2';
+
+// Unified card shape:
+//   { id, source:'ppt'|'tcg', name, set, number, printedTotal, releaseDate,
+//     rarity, image, rawMarket, tcgUrl, tcgPlayerId, ebay, raw }
+
+function median(arr) {
+  if (!arr || !arr.length) return null;
+  const s = [...arr].slice(0, 5).sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// --- Pokemon TCG API (free, no key) ---
+function escapeLuceneTerm(s) {
+  // Strip Lucene reserved characters; keep alphanumerics + spaces + hyphens
+  return String(s).toLowerCase().replace(/[+\-&|!(){}\[\]^"~?:\\\/]/g, ' ').trim();
+}
+
+async function searchPokemonTcg(name, number) {
+  const q = [];
+  if (name) {
+    const cleaned = escapeLuceneTerm(name);
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    if (words.length === 1) {
+      // Substring (contains): wraps with leading and trailing wildcards
+      q.push(`name:*${words[0]}*`);
+    } else if (words.length > 1) {
+      // Each word must appear somewhere in the name (any order)
+      const parts = words.map(w => `name:*${w}*`);
+      q.push('(' + parts.join(' AND ') + ')');
+    }
+  }
+  if (number) {
+    const n = String(number).split('/')[0].trim().replace(/^0+/, '');
+    if (n) q.push(`(number:"${n}" OR number:"${n.padStart(2, '0')}" OR number:"${n.padStart(3, '0')}")`);
+  }
+  if (!q.length) return [];
+  const url = `${TCG_BASE}/cards?q=${encodeURIComponent(q.join(' '))}&pageSize=50&orderBy=-set.releaseDate`;
+  let r;
+  try { r = await fetch(url); }
+  catch (e) { throw new Error(`Pokemon TCG API network error: ${e.message}`); }
+  if (!r.ok) {
+    // If wildcards rejected (some Lucene installs disallow leading wildcards),
+    // retry once with the simple unquoted term — Lucene tokenizer may still match.
+    if (r.status === 400 && name) {
+      const fallback = escapeLuceneTerm(name).split(/\s+/).filter(Boolean).map(w => `name:${w}*`).join(' AND ');
+      const fbUrl = `${TCG_BASE}/cards?q=${encodeURIComponent('(' + fallback + ')')}&pageSize=50&orderBy=-set.releaseDate`;
+      r = await fetch(fbUrl);
+      if (!r.ok) throw new Error(`Pokemon TCG API error ${r.status}`);
+    } else {
+      throw new Error(`Pokemon TCG API error ${r.status}`);
+    }
+  }
+  const json = await r.json();
+  return (json.data || []).map(normalizeTcg);
+}
+
+function normalizeTcg(c) {
+  const prices = ((c.tcgplayer || {}).prices || {});
+  const order = ['holofoil', '1stEditionHolofoil', 'reverseHolofoil', 'unlimitedHolofoil', 'normal', '1stEdition'];
+  let raw = null;
+  for (const v of order) { if (prices[v] && prices[v].market != null) { raw = prices[v].market; break; } }
+  if (raw == null) for (const v of Object.values(prices)) if (v && v.market != null) { raw = v.market; break; }
+  return {
+    id: c.id, source: 'tcg', name: c.name,
+    set: (c.set || {}).name || '',
+    number: c.number || '',
+    printedTotal: (c.set || {}).printedTotal || '',
+    releaseDate: (c.set || {}).releaseDate || '',
+    rarity: c.rarity || '',
+    image: (c.images || {}).small || (c.images || {}).large || '',
+    imageLarge: (c.images || {}).large || (c.images || {}).small || '',
+    rawMarket: raw,
+    tcgUrl: (c.tcgplayer || {}).url || '',
+    // PokemonPriceTracker's tcgPlayerId param accepts Pokemon TCG API IDs
+    // (e.g., "base1-4"). Use it for direct lookup instead of fuzzy search.
+    tcgPlayerId: c.id || null,
+    ebay: null,
+    raw: c
+  };
+}
+
+// Strip variant prefixes/suffixes to get the core Pokemon name.
+// "Mega Charizard X ex" → "Charizard". "Umbreon ex" → "Umbreon".
+// Used for the PSA Analysis URL since their site searches by Pokemon name,
+// not full card name, and exact variant queries return zero results.
+function pokemonCoreName(name) {
+  if (!name) return '';
+  let s = ' ' + name + ' ';
+  // Strip common prefixes (case-insensitive, with surrounding spaces preserved)
+  s = s.replace(/\s(mega|m|shining|dark|light|alolan|galarian|hisuian|paldean|radiant|crystal|delta|owner's|team\s\w+'s)\s/gi, ' ');
+  // Strip suffixes that follow the Pokemon name: ex, EX, GX, V, VMAX, VSTAR, BREAK, LV.X, LEGEND, Tag Team, Prism Star
+  s = s.replace(/\s(ex|gx|v|vmax|vstar|break|lv\.?x|legend|tag\steam|prism\sstar)(\s.*)?$/i, ' ');
+  // Strip trailing single-letter variants like X / Y (Mega Charizard X)
+  s = s.replace(/\s[xy]\s*$/i, ' ');
+  // Collapse whitespace
+  s = s.replace(/\s+/g, ' ').trim();
+  return s || name;
+}
+
+// --- PokemonPriceTracker v2 API ---
+async function searchPokemonPriceTracker(name, number, withEbay) {
+  const key = (settings.pptKey || '').trim();
+  if (!key) return null;
+  // Their search supports natural language; pass name + number as one query
+  const search = [name, number ? String(number).split('/')[0].trim() : ''].filter(Boolean).join(' ');
+  const params = new URLSearchParams({ search, limit: '24' });
+  if (withEbay) params.set('includeEbay', 'true');
+  const url = `${PPT_BASE}/cards?${params.toString()}`;
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`PokemonPriceTracker ${r.status}: ${text.slice(0, 200)}`);
+  }
+  const body = await r.json();
+  const list = Array.isArray(body) ? body : (body.data || body.cards || body.results || []);
+  return list.map(normalizePpt);
+}
+
+function normalizePpt(c) {
+  // Defensive: PokemonPriceTracker schema may use varied field names.
+  const setName = c.set?.name ?? c.setName ?? c.set ?? '';
+  const number = c.number ?? c.cardNumber ?? '';
+  const printedTotal = c.set?.printedTotal ?? c.set?.total ?? c.printedTotal ?? '';
+  const image = c.image?.small ?? c.image ?? c.images?.small ?? c.imageUrl ?? '';
+  const imageLarge = c.image?.large ?? c.imageLarge ?? c.images?.large ?? image;
+  const prices = c.prices || {};
+  const raw = prices.market ?? prices.marketPrice ?? c.marketPrice ?? null;
+  // eBay/PSA data
+  const ebay = c.ebay || c.psaPrices || c.graded || null;
+  const tcgUrl = c.tcgplayer?.url || c.tcgPlayerUrl || (c.tcgPlayerId ? `https://www.tcgplayer.com/product/${c.tcgPlayerId}` : '');
+  return {
+    id: c.id ?? c.tcgPlayerId ?? `${c.name}-${number}`,
+    source: 'ppt',
+    name: c.name || '',
+    set: typeof setName === 'string' ? setName : (setName.name || ''),
+    number,
+    printedTotal,
+    releaseDate: c.set?.releaseDate ?? c.releaseDate ?? '',
+    rarity: c.rarity || '',
+    image,
+    imageLarge,
+    rawMarket: typeof raw === 'number' ? raw : (raw != null ? Number(raw) : null),
+    tcgUrl,
+    tcgPlayerId: c.tcgPlayerId ?? null,
+    ebay,
+    raw: c
+  };
+}
+
+// Pull PSA prices from a normalized card. Returns {psa10, psa9, psa8} or null.
+function extractPsaFromEbay(ebay) {
+  if (!ebay || typeof ebay !== 'object') return null;
+  function pick(grade) {
+    const g = ebay['psa' + grade] ?? ebay[grade] ?? ebay['PSA ' + grade] ?? ebay['PSA' + grade];
+    if (g == null) return null;
+    if (typeof g === 'number') return g;
+    if (typeof g === 'object') {
+      // Try median of recent sales array first if present
+      const salesArr = g.recentSales || g.sales || g.history || [];
+      if (Array.isArray(salesArr) && salesArr.length) {
+        const nums = salesArr.map(s => Number(s.price ?? s.soldPrice ?? s.amount)).filter(n => !isNaN(n));
+        const m = median(nums);
+        if (m != null) return m;
+      }
+      return g.median ?? g.avg ?? g.average ?? g.price ?? g.market ?? null;
+    }
+    return null;
+  }
+  return { psa10: pick(10), psa9: pick(9), psa8: pick(8) };
+}
+
+// Fetch full card data (including ebay/PSA) for a previously-searched card.
+async function fetchFullCard(card) {
+  const key = (settings.pptKey || '').trim();
+  if (!key) return { error: 'No PokemonPriceTracker API key — type PSA prices manually.' };
+  // Prefer tcgPlayerId if we have it; else search by name+number with includeEbay + includeBoth
+  const params = new URLSearchParams({ includeEbay: 'true', includeBoth: 'true', limit: '5' });
+  if (card.tcgPlayerId) params.set('tcgPlayerId', String(card.tcgPlayerId));
+  else {
+    const search = [card.name, String(card.number || '').split('/')[0].trim()].filter(Boolean).join(' ');
+    params.set('search', search);
+  }
+  const url = `${PPT_BASE}/cards?${params.toString()}`;
+  try {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
+    const respText = await r.text();
+    let body;
+    try { body = JSON.parse(respText); } catch (e) { body = null; }
+    // Always stash for debug panel
+    window.__lastPptResponse = { url, status: r.status, ok: r.ok, body, rawText: respText };
+    console.log('[PSA Decision Tool] PokemonPriceTracker response:', window.__lastPptResponse);
+    if (!r.ok) {
+      return { error: `${r.status} ${r.statusText}: ${respText.slice(0, 300)}`, raw: window.__lastPptResponse };
+    }
+    if (!body) return { error: 'Response was not JSON', raw: window.__lastPptResponse };
+    const list = Array.isArray(body) ? body : (body.data || body.cards || body.results || []);
+    if (!list.length) return { error: 'No records returned for this card.', raw: window.__lastPptResponse };
+    // Pick the best match: same set+number if possible, else first
+    let pick = list[0];
+    for (const it of list) {
+      const num = it.number ?? it.cardNumber ?? '';
+      const set = it.set?.name ?? it.setName ?? '';
+      if (String(num) === String(card.number) && (set === card.set || !card.set)) { pick = it; break; }
+    }
+    const norm = normalizePpt(pick);
+    return { card: norm, raw: window.__lastPptResponse, rawPick: pick };
+  } catch (e) {
+    return { error: e.message, raw: window.__lastPptResponse };
+  }
+}
+
+// Deep-search a response object for PSA price hints. Used as a fallback when
+// the documented shape isn't returned. Walks the object looking for keys that
+// look like PSA grades (psa10, psa_10, "10", grade10) with numeric values.
+function deepFindPsa(obj, targetGrade) {
+  if (obj == null) return null;
+  if (typeof obj !== 'object') return null;
+  const tStr = String(targetGrade);
+  const matches = [];
+  function walk(o, path) {
+    if (o == null || typeof o !== 'object') return;
+    if (Array.isArray(o)) { o.forEach((v, i) => walk(v, path + '[' + i + ']')); return; }
+    for (const [k, v] of Object.entries(o)) {
+      const klc = String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isGradeKey = (klc === 'psa' + tStr) || (klc === tStr) || (klc === 'grade' + tStr) || (klc === 'psa' + tStr + 'avg') || (klc === 'psa' + tStr + 'median');
+      if (isGradeKey) {
+        if (typeof v === 'number' && v > 0) matches.push({ path: path + '.' + k, value: v });
+        else if (typeof v === 'object' && v != null) {
+          const nested = v.median ?? v.avg ?? v.average ?? v.price ?? v.market ?? v.recent ?? null;
+          if (typeof nested === 'number' && nested > 0) matches.push({ path: path + '.' + k + '.(nested)', value: nested });
+          else if (Array.isArray(v.recentSales || v.sales)) {
+            const arr = (v.recentSales || v.sales).map(s => Number(s.price ?? s.soldPrice)).filter(n => !isNaN(n) && n > 0);
+            if (arr.length) {
+              const m = median(arr);
+              if (m != null) matches.push({ path: path + '.' + k + '.(salesMedian)', value: m });
+            }
+          }
+        }
+      }
+      walk(v, path + '.' + k);
+    }
+  }
+  walk(obj, '$');
+  return matches.length ? matches[0].value : null;
+}
+
+// ============================================================
+// 4. UI: Search
+// ============================================================
+function setStatus(msg, busy) {
+  const el = document.getElementById('search-status');
+  el.innerHTML = '';
+  if (busy) {
+    const sp = document.createElement('span'); sp.className = 'loading'; el.appendChild(sp);
+    el.appendChild(document.createTextNode(' ' + msg));
+  } else {
+    el.textContent = msg;
+  }
+}
+
+async function doSearch() {
+  const name = document.getElementById('search-name').value.trim();
+  const number = document.getElementById('search-number').value.trim();
+  const grid = document.getElementById('search-results');
+  if (!name && !number) { setStatus('Type a card name or number to search.'); return; }
+  grid.classList.add('hidden');
+
+  const hasKey = !!(settings.pptKey || '').trim();
+  let combined = [];
+  let errs = [];
+
+  // Try PokemonPriceTracker first if key set (broader DB, finds promos)
+  if (hasKey) {
+    setStatus('Searching PokemonPriceTracker…', true);
+    try {
+      const list = await searchPokemonPriceTracker(name, number, false);
+      if (list && list.length) combined = combined.concat(list);
+    } catch (e) {
+      errs.push('PPT: ' + e.message);
+    }
+  }
+
+  // Always try Pokemon TCG API too — it has reliable images even when PPT doesn't
+  setStatus('Searching Pokemon TCG API…', true);
+  try {
+    const list = await searchPokemonTcg(name, number);
+    if (list && list.length) {
+      // Dedupe: don't add cards already covered by PPT (match on name + number + set)
+      const seen = new Set(combined.map(c => `${c.name}|${c.number}|${c.set}`.toLowerCase()));
+      list.forEach(c => {
+        const key = `${c.name}|${c.number}|${c.set}`.toLowerCase();
+        if (!seen.has(key)) combined.push(c);
+      });
+    }
+  } catch (e) {
+    errs.push('TCG: ' + e.message);
+  }
+
+  // If both APIs returned 0 with a number, retry name-only as a last resort
+  if (!combined.length && number) {
+    setStatus('No exact match for that number. Searching by name only…', true);
+    try {
+      const list = await searchPokemonTcg(name, '');
+      if (list && list.length) combined = list;
+    } catch (e) { /* already captured */ }
+  }
+
+  if (!combined.length) {
+    const errMsg = errs.length ? ' (' + errs.join('; ') + ')' : '';
+    setStatus(`No cards matched.${errMsg} If this looks like a CORS error from a file:// double-click, try: open a terminal here, run "python -m http.server 8000", then open http://localhost:8000/psa_decision_tool.html`);
+    return;
+  }
+
+  // Re-fill image gaps in PPT cards from TCG matches when possible
+  // (often PPT lacks images, TCG has them)
+  if (hasKey) {
+    const tcgByKey = new Map();
+    combined.forEach(c => { if (c.source === 'tcg') tcgByKey.set(`${c.name}|${c.number}`.toLowerCase(), c); });
+    combined.forEach(c => {
+      if (c.source === 'ppt' && !c.image) {
+        const t = tcgByKey.get(`${c.name}|${c.number}`.toLowerCase());
+        if (t) { c.image = t.image; c.imageLarge = t.imageLarge; }
+      }
+    });
+  }
+
+  setStatus(`${combined.length} match${combined.length === 1 ? '' : 'es'}. Click one to evaluate.`);
+  renderResults(combined);
+}
+
+function renderResults(cards) {
+  const grid = document.getElementById('search-results');
+  grid.innerHTML = '';
+  cards.forEach(card => {
+    const tile = document.createElement('div');
+    tile.className = 'result-tile';
+    if (card.image) {
+      const img = document.createElement('img');
+      img.src = card.image;
+      img.alt = card.name;
+      img.loading = 'lazy';
+      img.onerror = () => { img.style.display = 'none'; };
+      tile.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.style.cssText = 'height:160px;display:flex;align-items:center;justify-content:center;background:#f0f2f5;border-radius:4px;color:#9ca3af;font-size:11px;text-align:center;padding:6px;';
+      ph.textContent = '(no image)';
+      tile.appendChild(ph);
+    }
+    const name = document.createElement('div');
+    name.className = 'rt-name';
+    name.textContent = card.name;
+    tile.appendChild(name);
+    const set = document.createElement('div');
+    set.className = 'rt-set';
+    set.textContent = `${card.set || '?'} · ${card.number || '?'}${card.printedTotal ? '/' + card.printedTotal : ''}`;
+    tile.appendChild(set);
+    const src = document.createElement('div');
+    src.style.cssText = 'font-size:10px;color:#9ca3af;margin-top:2px;';
+    src.textContent = card.source === 'ppt' ? 'PokemonPriceTracker' : 'Pokemon TCG';
+    tile.appendChild(src);
+    tile.addEventListener('click', () => selectCard(card));
+    grid.appendChild(tile);
+  });
+  grid.classList.remove('hidden');
+}
+
+// ============================================================
+// 5. UI: Selected card + prices + decision
+// ============================================================
+function manualEntry() {
+  const name = (document.getElementById('search-name').value || '').trim();
+  if (!name) {
+    setStatus('Type at least a card name above before clicking Enter manually.');
+    return;
+  }
+  const number = (document.getElementById('search-number').value || '').trim();
+  // Prompt for set name since we don't have one to default to
+  const setName = prompt(`Set name for "${name}" (e.g., "Mega Evolution Promos"):`, '') || '';
+  // Synthesize a unified card object so selectCard treats it normally
+  const synthetic = {
+    id: `manual-${Date.now()}`,
+    source: 'manual',
+    name, set: setName, number,
+    printedTotal: '', releaseDate: '', rarity: '',
+    image: '', imageLarge: '',
+    rawMarket: null, tcgUrl: '', tcgPlayerId: null,
+    ebay: null, raw: { manual: true }
+  };
+  selectCard(synthetic);
+}
+
+async function selectCard(card) {
+  currentCard = card;
+  const detail = document.getElementById('detail-section');
+  detail.classList.remove('hidden');
+  document.getElementById('card-name').textContent = card.name;
+  const imgEl = document.getElementById('card-image');
+  imgEl.src = card.imageLarge || card.image || '';
+  imgEl.onerror = () => { imgEl.style.opacity = '0.2'; };
+  const setLine = `${card.set || '—'} · ${card.number || '?'}${card.printedTotal ? '/' + card.printedTotal : ''}${card.releaseDate ? ' · released ' + card.releaseDate : ''}`;
+  document.getElementById('card-set-line').textContent = setLine;
+  const subtypes = (card.raw && card.raw.subtypes) || [];
+  document.getElementById('card-rarity-line').innerHTML =
+    (card.rarity ? `<span class="pill">${card.rarity}</span>` : '') +
+    subtypes.map(s => `<span class="pill">${s}</span>`).join('');
+  const tcgUrl = card.tcgUrl || `https://www.tcgplayer.com/search/pokemon/product?q=${encodeURIComponent(card.name)}`;
+  document.getElementById('card-tcg-link').innerHTML = `<a href="${tcgUrl}" target="_blank" rel="noopener">TCGPlayer page →</a>`;
+
+  // External lookup buttons
+  const pcQ = encodeURIComponent(`${card.name} ${card.set || ''} ${card.number || ''}`.trim());
+  document.getElementById('pricecharting-btn').href = `https://www.pricecharting.com/search-products?type=prices&q=${pcQ}`;
+  // PokemonPriceTracker's PSA Analysis page searches by Pokemon name, not full
+  // card name. "Mega Charizard X ex" returns zero; "Charizard" returns dozens
+  // of variants the user can scroll. Pass the simplified core name.
+  const pptCoreName = pokemonCoreName(card.name);
+  document.getElementById('ppt-web-btn').href = `https://www.pokemonpricetracker.com/psa-analysis?name=${encodeURIComponent(pptCoreName)}`;
+  const ebayQ = encodeURIComponent(`${card.name} ${card.set || ''} ${card.number || ''} PSA`.trim());
+  document.getElementById('ebay-sold-btn').href = `https://www.ebay.com/sch/i.html?_nkw=${ebayQ}&LH_Sold=1&LH_Complete=1`;
+  // Hide previous debug content
+  const debugPanel = document.getElementById('debug-panel');
+  debugPanel.hidden = true;
+  document.getElementById('debug-content').innerHTML = '';
+
+  // Reset prices
+  const raw = card.rawMarket;
+  currentPrices = { raw, psa10: null, psa9: null, psa8: null };
+  priceSource = { raw: raw != null ? 'auto' : 'manual', psa10: 'manual', psa9: 'manual', psa8: 'manual' };
+  setBadge('raw-badge', priceSource.raw);
+  document.getElementById('price-raw').value = raw != null ? Number(raw).toFixed(2) : '';
+  setBadge('psa10-badge', 'manual'); setBadge('psa9-badge', 'manual');
+  document.getElementById('price-psa10').value = '';
+  document.getElementById('price-psa9').value = '';
+  document.getElementById('price-psa8').value = '';
+
+  // Try to fetch full data with eBay/PSA from PokemonPriceTracker
+  // (skip for manual entries — there's nothing in their DB to look up)
+  if (card.source === 'manual') {
+    setStatus('Manual card entry. Use the lookup buttons below for prices.');
+  } else if ((settings.pptKey || '').trim()) {
+    setStatus('Card selected. Fetching PSA prices…', true);
+    const result = await fetchFullCard(card);
+    if (result.error) {
+      setStatus(`Card selected. PSA auto-fetch failed: ${result.error} — use the lookup buttons below.`);
+      showDebug(result.raw, 'error: ' + result.error);
+    } else {
+      const full = result.card;
+      // Update raw if PPT had a fresher value
+      if (full.rawMarket != null && currentPrices.raw == null) {
+        currentPrices.raw = full.rawMarket;
+        document.getElementById('price-raw').value = full.rawMarket.toFixed(2);
+        priceSource.raw = 'auto'; setBadge('raw-badge', 'auto');
+      }
+      // 1st pass: documented shape
+      const psa = extractPsaFromEbay(full.ebay) || { psa10: null, psa9: null, psa8: null };
+      // 2nd pass: deep-search the entire raw record (covers schema variations)
+      if (psa.psa10 == null) psa.psa10 = deepFindPsa(result.rawPick, 10);
+      if (psa.psa9  == null) psa.psa9  = deepFindPsa(result.rawPick, 9);
+      if (psa.psa8  == null) psa.psa8  = deepFindPsa(result.rawPick, 8);
+      let filled = 0;
+      if (psa.psa10 != null) { currentPrices.psa10 = Number(psa.psa10); document.getElementById('price-psa10').value = Number(psa.psa10).toFixed(2); setBadge('psa10-badge', 'auto'); filled++; }
+      if (psa.psa9 != null)  { currentPrices.psa9  = Number(psa.psa9);  document.getElementById('price-psa9').value  = Number(psa.psa9).toFixed(2);  setBadge('psa9-badge', 'auto');  filled++; }
+      if (psa.psa8 != null)  { currentPrices.psa8  = Number(psa.psa8);  document.getElementById('price-psa8').value  = Number(psa.psa8).toFixed(2); filled++; }
+      if (filled === 0) {
+        setStatus('Card selected. PokemonPriceTracker returned a record but no PSA / eBay graded fields (likely because the free tier excludes graded data). Use the lookup buttons below; expand "API response" if you want to share the raw data with us.');
+        showDebug(result.raw, 'No PSA fields found in response. Either free tier doesn\'t include graded data, or the schema differs from what the tool expects.');
+      } else {
+        setStatus(`Card selected. ${filled} PSA price${filled === 1 ? '' : 's'} auto-filled — confirm or override.`);
+        showDebug(result.raw, `OK — extracted ${filled} PSA prices.`);
+      }
+    }
+  } else {
+    setStatus('Card selected. Click "PriceCharting" or "PokemonPriceTracker" below to look up PSA prices, then type them in.');
+  }
+  detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  recompute();
+}
+
+function showDebug(rawResp, note) {
+  const panel = document.getElementById('debug-panel');
+  const content = document.getElementById('debug-content');
+  if (!rawResp) { panel.hidden = true; return; }
+  const truncated = JSON.stringify(rawResp.body || rawResp.rawText || rawResp, null, 2);
+  const safe = truncated.length > 6000 ? truncated.slice(0, 6000) + '\n... (truncated)' : truncated;
+  content.innerHTML = `
+    <div style="margin:6px 0;color:var(--muted);">${note ? note.replace(/[<>]/g, c => ({'<':'&lt;','>':'&gt;'}[c])) : ''}</div>
+    <div><code style="font-size:11px;color:var(--muted);word-break:break-all;">${rawResp.url || ''}</code> → status ${rawResp.status || '?'}</div>
+    <button class="copy-btn" id="copy-debug-btn">Copy response to clipboard</button>
+    <pre id="debug-pre"></pre>
+  `;
+  document.getElementById('debug-pre').textContent = safe;
+  document.getElementById('copy-debug-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText(JSON.stringify(rawResp, null, 2)).then(() => toast('Copied'));
+  });
+  panel.hidden = false;
+}
+
+function setBadge(id, kind) {
+  const el = document.getElementById(id);
+  el.classList.remove('auto', 'manual');
+  el.classList.add(kind);
+  el.textContent = kind;
+}
+
+function recompute() {
+  if (!currentCard) return;
+  const p10pct = Number(document.getElementById('p10-slider').value);
+  document.getElementById('p10-display').textContent = p10pct + '%';
+  // Re-read prices from inputs
+  ['raw', 'psa10', 'psa9', 'psa8'].forEach(k => {
+    const v = document.getElementById('price-' + k).value;
+    currentPrices[k] = v === '' ? null : Number(v);
+  });
+
+  const result = compute(currentPrices, p10pct);
+  const decisionEl = document.getElementById('decision-section');
+  if (!result.ready) {
+    decisionEl.classList.add('hidden');
+    return;
+  }
+  decisionEl.classList.remove('hidden');
+  renderDecision(result, p10pct);
+  drawSensitivity();
+}
+
+function fmt$(v) { return v == null || isNaN(v) ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtPct(v) { return v == null || isNaN(v) ? '—' : (v * 100).toFixed(1) + '%'; }
+
+function renderDecision(r, p10pct) {
+  const recEl = document.getElementById('big-rec');
+  // Tier class uses dashes (no spaces) for CSS
+  const tierCls = r.tier.replace(/\s+/g, '-');
+  recEl.className = 'big-rec ' + tierCls;
+  recEl.innerHTML = `${r.tier}<span class="rec-sub">based on probability margin vs time-adjusted breakeven</span>`;
+
+  document.getElementById('m-raw').textContent = fmt$(r.netRaw);
+  document.getElementById('m-graded').textContent = fmt$(r.expectedGraded);
+  document.getElementById('m-evgain').textContent = fmt$(r.evGain);
+  document.getElementById('m-breakeven').textContent = formatBreakevenPct(r.breakevenTime);
+  document.getElementById('m-margin').textContent = r.marginTime == null ? '—' : (r.marginTime * 100 > 0 ? '+' : '') + (r.marginTime * 100).toFixed(1) + 'pp';
+  document.getElementById('m-timeev').textContent = fmt$(r.timeEvGain);
+
+  // Color cards
+  setMetricTone('m-evgain-card', r.evGain);
+  setMetricTone('m-margin-card', r.marginTime);
+  setMetricTone('m-timeev-card', r.timeEvGain);
+
+  // Interpretation tied to tier
+  const interp = document.getElementById('interpret');
+  const beStr = r.breakevenTime == null ? '—' : (r.breakevenTime < 0 ? 'below 0%' : (r.breakevenTime > 1 ? 'above 100%' : (r.breakevenTime*100).toFixed(1) + '%'));
+  const marStr = r.marginTime == null ? '—' : ((r.marginTime*100 >= 0 ? '+' : '') + (r.marginTime*100).toFixed(1) + 'pp');
+  let txt;
+  switch (r.tier) {
+    case 'STRONG GRADE':
+      if (r.breakevenTime != null && r.breakevenTime < 0) {
+        txt = `<strong>Strong grade.</strong> The PSA 9 / PSA 8 prices alone are valuable enough that grading beats raw <em>even at zero probability of a 10</em>. No-brainer — submit it.`;
+      } else {
+        txt = `<strong>Strong grade.</strong> Your ${p10pct}% estimate sits ${marStr} above the ${beStr} time-adjusted breakeven. Wide cushion means the recommendation is robust to your probability guess being a bit off. Time-adj. gain: <strong>${fmt$(r.timeEvGain)}</strong>.`;
+      }
+      break;
+    case 'WEAK GRADE':
+      txt = `<strong>Weak grade.</strong> Your ${p10pct}% estimate is ${marStr} above the ${beStr} breakeven — positive but slim. Grade only if you're confident in your condition read; if you're being optimistic, this becomes a toss-up. Time-adj. gain: <strong>${fmt$(r.timeEvGain)}</strong>.`;
+      break;
+    case 'TOSS-UP':
+      txt = `<strong>Toss-up.</strong> Your ${p10pct}% estimate is within 5pp of the ${beStr} breakeven. The math doesn't favor either path meaningfully — pick whichever feels right and don't agonize. The time spent deciding probably costs more than the EV difference.`;
+      break;
+    case 'WEAK SELL':
+      txt = `<strong>Weak sell.</strong> Your ${p10pct}% estimate is ${marStr} below the ${beStr} breakeven — slightly negative. Sell raw is the right call unless you're being unduly pessimistic about the card's condition.`;
+      break;
+    case 'STRONG SELL':
+      if (r.breakevenTime != null && r.breakevenTime > 1) {
+        txt = `<strong>Strong sell.</strong> Even a guaranteed PSA 10 can't overcome the grading cost. This is bulk territory — sell raw on TCGPlayer (or sell as a lot) and move on.`;
+      } else {
+        txt = `<strong>Strong sell.</strong> Your ${p10pct}% estimate is ${marStr} below the ${beStr} breakeven. The grading math is decisively negative — don't talk yourself into it.`;
+      }
+      break;
+    default:
+      txt = `Tier: ${r.tier}.`;
+  }
+  interp.innerHTML = txt;
+}
+
+function formatBreakevenPct(be) {
+  if (be == null) return '—';
+  if (be < 0) return '< 0% (always)';
+  if (be > 1) return '> 100% (never)';
+  return (be * 100).toFixed(1) + '%';
+}
+
+function setMetricTone(id, value) {
+  const el = document.getElementById(id);
+  el.classList.remove('good', 'bad');
+  if (value == null || isNaN(value)) return;
+  el.classList.add(value >= 0 ? 'good' : 'bad');
+}
+
+function drawSensitivity() {
+  const ctx = document.getElementById('sensitivity-chart');
+  const points = [];
+  for (let p = 0; p <= 100; p += 2) {
+    const r = compute(currentPrices, p);
+    if (r.ready) points.push({ x: p, y: r.timeEvGain });
+  }
+  const userP = Number(document.getElementById('p10-slider').value);
+  const userPoint = compute(currentPrices, userP);
+  if (sensChart) sensChart.destroy();
+  sensChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Time-adj. EV gain ($)',
+          data: points,
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37,99,235,.1)',
+          borderWidth: 2,
+          fill: true,
+          pointRadius: 0,
+          tension: .2
+        },
+        {
+          label: 'Your estimate',
+          data: userPoint.ready ? [{ x: userP, y: userPoint.timeEvGain }] : [],
+          borderColor: '#dc2626',
+          backgroundColor: '#dc2626',
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          showLine: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { type: 'linear', min: 0, max: 100, title: { display: true, text: 'p(PSA 10) %' } },
+        y: { title: { display: true, text: 'Time-adj. EV gain ($)' }, grid: { color: ctx => ctx.tick.value === 0 ? '#dc2626' : '#e1e5ec' } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+// ============================================================
+// 6. History
+// ============================================================
+function renderHistory() {
+  const empty = document.getElementById('history-empty');
+  const tbl = document.getElementById('history-table');
+  const tbody = document.getElementById('history-body');
+  if (!history.length) { empty.classList.remove('hidden'); tbl.classList.add('hidden'); return; }
+  empty.classList.add('hidden'); tbl.classList.remove('hidden');
+  tbody.innerHTML = '';
+  history.slice().reverse().forEach((h, revIdx) => {
+    const tr = document.createElement('tr');
+    // Tier — fall back to legacy 'rec' field for entries saved before tiers existed
+    const tier = h.tier || (h.rec === 'GRADE' ? 'WEAK GRADE' : (h.rec === 'SELL RAW' ? 'WEAK SELL' : 'TOSS-UP'));
+    const tierCls = tier.replace(/\s+/g, '-');
+    // Prefer time-adjusted breakeven if saved
+    const be = h.breakevenTime != null ? h.breakevenTime : h.breakeven;
+    const timeEv = h.timeEvGain != null ? h.timeEvGain : h.evGain;
+    const dt = h.ts ? new Date(h.ts) : null;
+    const dateStr = dt ? `${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}` : '—';
+    const trueIdx = history.length - 1 - revIdx;
+    tr.innerHTML = `
+      <td style="white-space:nowrap;color:var(--muted);font-size:11px;">${dateStr}</td>
+      <td style="font-weight:500;">${escapeHtml(h.name || '—')}</td>
+      <td style="color:var(--muted);">${escapeHtml(h.set || '—')}</td>
+      <td>${escapeHtml(h.number || '—')}</td>
+      <td>${fmt$(h.raw)}</td>
+      <td>${fmt$(h.psa10)}</td>
+      <td>${fmt$(h.psa9)}</td>
+      <td>${h.p10}%</td>
+      <td>${be == null ? '—' : (be < 0 ? '<0%' : (be > 1 ? '>100%' : (be*100).toFixed(1) + '%'))}</td>
+      <td style="font-weight:500;color:${(timeEv ?? 0) >= 0 ? 'var(--good)' : 'var(--bad)'};">${fmt$(timeEv)}</td>
+      <td><span class="tier-pill ${tierCls}">${tier}</span></td>
+      <td><button class="ghost" data-idx="${trueIdx}" title="Delete this row">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = Number(btn.dataset.idx);
+      history.splice(i, 1);
+      saveHistory(history);
+      renderHistory();
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// --- CSV export ---
+function csvCell(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function exportHistoryCsv() {
+  if (!history.length) { toast('Nothing to export — save a decision first.'); return; }
+  const headers = [
+    'Saved at', 'Card name', 'Set', 'Number',
+    'Raw price', 'PSA 10', 'PSA 9', 'PSA <9',
+    'Your p(PSA 10) %', 'Breakeven p(10) %', 'Margin pp',
+    'EV gain $', 'Time-adj EV gain $', 'Decision tier'
+  ];
+  const rows = history.map(h => {
+    const tier = h.tier || (h.rec === 'GRADE' ? 'WEAK GRADE' : (h.rec === 'SELL RAW' ? 'WEAK SELL' : 'TOSS-UP'));
+    const be = h.breakevenTime != null ? h.breakevenTime : h.breakeven;
+    const margin = (h.marginTime != null) ? h.marginTime : (be != null && h.p10 != null ? (h.p10/100 - be) : null);
+    return [
+      h.ts || '',
+      h.name || '',
+      h.set || '',
+      h.number || '',
+      h.raw == null ? '' : h.raw.toFixed(2),
+      h.psa10 == null ? '' : h.psa10.toFixed(2),
+      h.psa9 == null ? '' : h.psa9.toFixed(2),
+      h.psa8 == null ? '' : h.psa8.toFixed(2),
+      h.p10 != null ? h.p10 : '',
+      be == null ? '' : (be * 100).toFixed(2),
+      margin == null ? '' : (margin * 100).toFixed(2),
+      h.evGain == null ? '' : h.evGain.toFixed(2),
+      h.timeEvGain == null ? '' : h.timeEvGain.toFixed(2),
+      tier
+    ];
+  });
+  const lines = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+  // BOM so Excel opens UTF-8 correctly
+  const blob = new Blob(['﻿' + lines], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date();
+  const stamp = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+  a.href = url;
+  a.download = `psa_decisions_${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  toast(`Exported ${history.length} decision${history.length === 1 ? '' : 's'}`);
+}
+
+// ============================================================
+// 7. Settings UI
+// ============================================================
+function settingsToUI(s) {
+  document.getElementById('s-psa-fee').value = s.psaFee;
+  document.getElementById('s-psa-ship-out').value = s.psaShipOut;
+  document.getElementById('s-psa-ship-in').value = s.psaShipIn;
+  document.getElementById('s-psa-supplies').value = s.psaSupplies;
+  document.getElementById('s-psa-months').value = s.psaMonths;
+  document.getElementById('s-tcg-commission').value = s.tcgCommission;
+  document.getElementById('s-tcg-pro').value = s.tcgPro;
+  document.getElementById('s-tcg-pay-pct').value = s.tcgPayPct;
+  document.getElementById('s-tcg-pay-fix').value = s.tcgPayFix;
+  document.getElementById('s-raw-ship').value = s.rawShip;
+  document.getElementById('s-graded-ship').value = s.gradedShip;
+  document.getElementById('s-p9-cond').value = s.p9Cond;
+  document.getElementById('s-min-edge').value = s.minEdge;
+  document.getElementById('s-hurdle').value = s.hurdle;
+  document.getElementById('s-ppt-key').value = s.pptKey;
+}
+function uiToSettings() {
+  return {
+    psaFee: Number(document.getElementById('s-psa-fee').value),
+    psaShipOut: Number(document.getElementById('s-psa-ship-out').value),
+    psaShipIn: Number(document.getElementById('s-psa-ship-in').value),
+    psaSupplies: Number(document.getElementById('s-psa-supplies').value),
+    psaMonths: Number(document.getElementById('s-psa-months').value),
+    tcgCommission: Number(document.getElementById('s-tcg-commission').value),
+    tcgPro: Number(document.getElementById('s-tcg-pro').value),
+    tcgPayPct: Number(document.getElementById('s-tcg-pay-pct').value),
+    tcgPayFix: Number(document.getElementById('s-tcg-pay-fix').value),
+    rawShip: Number(document.getElementById('s-raw-ship').value),
+    gradedShip: Number(document.getElementById('s-graded-ship').value),
+    p9Cond: Number(document.getElementById('s-p9-cond').value),
+    minEdge: Number(document.getElementById('s-min-edge').value),
+    hurdle: Number(document.getElementById('s-hurdle').value),
+    pptKey: document.getElementById('s-ppt-key').value
+  };
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ============================================================
+// 8. Init & event wiring
+// ============================================================
+function init() {
+  settingsToUI(settings);
+  renderHistory();
+
+  document.getElementById('search-btn').addEventListener('click', doSearch);
+  document.getElementById('manual-btn').addEventListener('click', manualEntry);
+  document.getElementById('search-name').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+  document.getElementById('search-number').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+  ['price-raw', 'price-psa10', 'price-psa9', 'price-psa8'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      const key = id.replace('price-', '');
+      priceSource[key] = 'manual';
+      const badgeMap = { raw: 'raw-badge', psa10: 'psa10-badge', psa9: 'psa9-badge' };
+      if (badgeMap[key]) setBadge(badgeMap[key], 'manual');
+      recompute();
+    });
+  });
+  document.getElementById('p10-slider').addEventListener('input', recompute);
+
+  document.getElementById('save-settings').addEventListener('click', () => {
+    settings = uiToSettings();
+    saveSettings(settings);
+    toast('Settings saved');
+    recompute();
+  });
+  document.getElementById('reset-settings').addEventListener('click', () => {
+    if (!confirm('Reset all settings to defaults?')) return;
+    settings = { ...DEFAULTS };
+    saveSettings(settings);
+    settingsToUI(settings);
+    toast('Settings reset');
+    recompute();
+  });
+
+  document.getElementById('settings-btn').addEventListener('click', () => {
+    document.querySelector('.settings-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    currentCard = null;
+    document.getElementById('detail-section').classList.add('hidden');
+    document.getElementById('decision-section').classList.add('hidden');
+    document.getElementById('search-results').classList.add('hidden');
+    document.getElementById('search-results').innerHTML = '';
+    document.getElementById('search-name').value = '';
+    document.getElementById('search-number').value = '';
+    setStatus('');
+  });
+
+  document.getElementById('save-btn').addEventListener('click', () => {
+    if (!currentCard) return;
+    const p10pct = Number(document.getElementById('p10-slider').value);
+    const r = compute(currentPrices, p10pct);
+    if (!r.ready) { toast('Fill all four prices first'); return; }
+    history.push({
+      ts: new Date().toISOString(),
+      name: currentCard.name,
+      set: currentCard.set || '',
+      number: currentCard.number,
+      raw: currentPrices.raw, psa10: currentPrices.psa10, psa9: currentPrices.psa9, psa8: currentPrices.psa8,
+      p10: p10pct,
+      breakeven: r.breakeven,
+      breakevenTime: r.breakevenTime,
+      marginTime: r.marginTime,
+      evGain: r.evGain,
+      timeEvGain: r.timeEvGain,
+      rec: r.recTime,
+      tier: r.tier
+    });
+    saveHistory(history);
+    renderHistory();
+    toast('Saved to history');
+  });
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    document.getElementById('detail-section').classList.add('hidden');
+    document.getElementById('decision-section').classList.add('hidden');
+  });
+
+  document.getElementById('export-csv-btn').addEventListener('click', exportHistoryCsv);
+  document.getElementById('clear-all-btn').addEventListener('click', () => {
+    if (!history.length) { toast('Nothing to clear.'); return; }
+    if (!confirm(`Delete all ${history.length} saved decision${history.length === 1 ? '' : 's'}? This can't be undone.`)) return;
+    history = [];
+    saveHistory(history);
+    renderHistory();
+    toast('All decisions cleared');
+  });
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
