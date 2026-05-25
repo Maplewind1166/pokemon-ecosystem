@@ -2897,6 +2897,14 @@ function closeSettings() {
 // ============================================================
 const TCG_BASE = 'https://api.pokemontcg.io/v2';
 const PPT_BASE = 'https://www.pokemonpricetracker.com/api/v2';
+const CORS_PROXY = 'https://corsproxy.io/?';
+
+// PPT requires a CORS proxy when called from the browser (PPT blocks preflight requests)
+async function pptFetch(endpoint, key) {
+  const fullUrl = PPT_BASE + endpoint;
+  const proxied = CORS_PROXY + encodeURIComponent(fullUrl);
+  return fetch(proxied, { headers: { Authorization: `Bearer ${key}` } });
+}
 
 function escapeLuceneTerm(s) {
   return String(s).toLowerCase().replace(/[+\-&|!(){}\[\]^"~?:\\\/]/g, ' ').trim();
@@ -2951,24 +2959,35 @@ async function searchPokemonPriceTracker(name, number) {
   const settings = await getSettings();
   const key = (settings && settings.ppt_api_key || '').trim();
   if (!key) return null;
-  const search = [name, number ? String(number).split('/')[0].trim() : ''].filter(Boolean).join(' ');
-  const params = new URLSearchParams({ search, limit: '24' });
-  const url = `${PPT_BASE}/cards?${params.toString()}`;
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
+  // Search by name only — appending the number confuses PPT search for promos
+  const params = new URLSearchParams({ search: name.trim(), limit: '24' });
+  const r = await pptFetch(`/cards?${params.toString()}`, key);
   if (!r.ok) {
     const text = await r.text().catch(() => '');
     throw new Error(`PokemonPriceTracker ${r.status}: ${text.slice(0, 200)}`);
   }
   const body = await r.json();
   const list = Array.isArray(body) ? body : (body.data || body.cards || body.results || []);
-  return list.map(normalizePpt);
+  const normalized = list.map(normalizePpt);
+  // If a card number was provided, sort exact matches to the top (don't filter out others)
+  if (number) {
+    const n = String(number).split('/')[0].trim().replace(/^0+/, '');
+    normalized.sort((a, b) => {
+      const aMatch = a.number && a.number.replace(/^0+/, '') === n ? 0 : 1;
+      const bMatch = b.number && b.number.replace(/^0+/, '') === n ? 0 : 1;
+      return aMatch - bMatch;
+    });
+  }
+  return normalized;
 }
 
 function normalizePpt(c) {
-  const setName = c.set?.name ?? c.setName ?? c.set ?? '';
-  const number = c.number ?? c.cardNumber ?? '';
-  const image = c.image?.small ?? c.image ?? c.images?.small ?? c.imageUrl ?? '';
-  const imageLarge = c.image?.large ?? c.imageLarge ?? c.images?.large ?? image;
+  // PPT API returns setName as a top-level string field (not nested)
+  const setName = c.setName ?? c.set?.name ?? (typeof c.set === 'string' ? c.set : '') ?? '';
+  const number = c.cardNumber ?? c.number ?? '';
+  // PPT API returns images as imageCdnUrl200 / imageCdnUrl400 / imageCdnUrl800
+  const image = c.imageCdnUrl200 ?? c.imageCdnUrl400 ?? c.imageUrl ?? c.image?.small ?? c.image ?? c.images?.small ?? '';
+  const imageLarge = c.imageCdnUrl800 ?? c.imageCdnUrl400 ?? c.imageLarge ?? c.image?.large ?? c.images?.large ?? image;
   const prices = c.prices || {};
   const raw = prices.market ?? prices.marketPrice ?? c.marketPrice ?? null;
   return {
@@ -2985,7 +3004,8 @@ function normalizePpt(c) {
     imageLarge,
     rawMarket: typeof raw === 'number' ? raw : (raw != null ? Number(raw) : null),
     tcgUrl: c.tcgplayer?.url || c.tcgPlayerUrl || '',
-    tcgPlayerId: c.tcgPlayerId ?? c.id ?? null,
+    tcgPlayerId: c.tcgPlayerId ?? null,
+    pptId: c.id ?? null,
     raw: c
   };
 }
@@ -3141,17 +3161,28 @@ async function doAddCardSearch() {
   try {
     const r = await searchPokemonTcg(name, number);
     if (r && r.length) {
-      const seen = new Set(combined.map(c => `${c.name}|${c.number}|${c.set}`.toLowerCase()));
-      r.forEach(c => { const k = `${c.name}|${c.number}|${c.set}`.toLowerCase(); if (!seen.has(k)) combined.push(c); });
+      // Deduplicate by tcgPlayerId first (most reliable), then fall back to name+number
+      const seen = new Set(combined.map(c => c.tcgPlayerId ? `id:${c.tcgPlayerId}` : `${c.name}|${c.number}`.toLowerCase()));
+      r.forEach(c => {
+        const k = c.tcgPlayerId ? `id:${c.tcgPlayerId}` : `${c.name}|${c.number}`.toLowerCase();
+        if (!seen.has(k)) { seen.add(k); combined.push(c); }
+      });
     }
   } catch (e) { errs.push('TCG: ' + e.message); }
   // Image gap-fill: PPT cards often lack images; pull from matching TCG card if possible
   if (hasKey) {
+    // Image gap-fill: match PPT cards to TCG cards by tcgPlayerId or name+number
+    const tcgById = new Map();
     const tcgByKey = new Map();
-    combined.forEach(c => { if (c.source === 'tcg') tcgByKey.set(`${c.name}|${c.number}`.toLowerCase(), c); });
+    combined.forEach(c => {
+      if (c.source === 'tcg') {
+        if (c.tcgPlayerId) tcgById.set(String(c.tcgPlayerId), c);
+        tcgByKey.set(`${c.name}|${c.number}`.toLowerCase(), c);
+      }
+    });
     combined.forEach(c => {
       if (c.source === 'ppt' && !c.image) {
-        const t = tcgByKey.get(`${c.name}|${c.number}`.toLowerCase());
+        const t = (c.tcgPlayerId && tcgById.get(String(c.tcgPlayerId))) || tcgByKey.get(`${c.name}|${c.number}`.toLowerCase());
         if (t) { c.image = t.image; c.imageLarge = t.imageLarge; }
       }
     });
@@ -3324,6 +3355,8 @@ async function saveAddCard() {
       rarity: s.rarity || '',
       variant: 'holofoil', // best guess; user can override later
       tcg_id: s.source === 'tcg' ? s.id : (s.tcgPlayerId || null),
+      // Store PPT's own ID for promo cards that have no tcg_id
+      ppt_id: s.source === 'ppt' ? (s.pptId || null) : null,
       tcgplayer_product_id: null,
       image_url: s.imageLarge || s.image || null,
       image_local: null,
@@ -3387,6 +3420,7 @@ async function saveAddCard() {
     variant: identity.variant,
     language: 'english',
     tcg_id: identity.tcg_id,
+    ppt_id: identity.ppt_id || null,
     tcgplayer_product_id: identity.tcgplayer_product_id,
     condition,
     grade_label: gradeLabelFromCondition(condition),
@@ -4039,7 +4073,7 @@ async function backfillPriceHistory(days) {
     if (refreshState.cancelled) break;
     const c = candidates[i];
     try {
-      const url = `${PPT_BASE}/cards?tcgPlayerId=${encodeURIComponent(c.tcg_id)}&includeHistory=true&days=${days}&limit=1`;
+      const url = CORS_PROXY + encodeURIComponent(`${PPT_BASE}/cards?tcgPlayerId=${encodeURIComponent(c.tcg_id)}&includeHistory=true&days=${days}&limit=1`);
       const r = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
       if (r.ok) {
         const body = await r.json();
@@ -4425,7 +4459,7 @@ async function refreshWishlistItemPrice(wlId) {
   let price = null, source = null;
   if (key) {
     try {
-      const url = `${PPT_BASE}/cards?tcgPlayerId=${encodeURIComponent(item.tcg_id)}&limit=1`;
+      const url = CORS_PROXY + encodeURIComponent(`${PPT_BASE}/cards?tcgPlayerId=${encodeURIComponent(item.tcg_id)}&limit=1`);
       const r = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
       if (r.ok) {
         const body = await r.json();
@@ -4561,8 +4595,12 @@ async function doWlSearch() {
   try {
     const r = await searchPokemonTcg(name, number);
     if (r && r.length) {
-      const seen = new Set(combined.map(c => `${c.name}|${c.number}|${c.set}`.toLowerCase()));
-      r.forEach(c => { const k = `${c.name}|${c.number}|${c.set}`.toLowerCase(); if (!seen.has(k)) combined.push(c); });
+      // Deduplicate by tcgPlayerId first (most reliable), then fall back to name+number
+      const seen = new Set(combined.map(c => c.tcgPlayerId ? `id:${c.tcgPlayerId}` : `${c.name}|${c.number}`.toLowerCase()));
+      r.forEach(c => {
+        const k = c.tcgPlayerId ? `id:${c.tcgPlayerId}` : `${c.name}|${c.number}`.toLowerCase();
+        if (!seen.has(k)) { seen.add(k); combined.push(c); }
+      });
     }
   } catch (e) { /* swallow */ }
   if (!combined.length) {
@@ -5463,9 +5501,9 @@ async function populateCardDetail(card) {
   const ebayQ = encodeURIComponent(`${card.name} ${card.set || ''} ${card.number || ''} ${card.condition.startsWith('psa_') ? 'PSA' : ''}`.trim());
   document.getElementById('cd-ebay-link').href = `https://www.ebay.com/sch/i.html?_nkw=${ebayQ}&LH_Sold=1&LH_Complete=1`;
 
-  // Action buttons — refresh disabled for non-Pokemon or missing tcg_id
+  // Action buttons — refresh enabled for Pokemon with tcg_id OR ppt_id
   const refreshBtn = document.getElementById('cd-refresh-btn');
-  if (card.category === 'Pokemon' && card.tcg_id) {
+  if (card.category === 'Pokemon' && (card.tcg_id || card.ppt_id)) {
     refreshBtn.disabled = false;
     refreshBtn.title = 'Fetch fresh market price from APIs';
   } else if (card.category !== 'Pokemon') {
@@ -5473,7 +5511,7 @@ async function populateCardDetail(card) {
     refreshBtn.title = 'Auto-pricing only for Pokemon in MVP';
   } else {
     refreshBtn.disabled = true;
-    refreshBtn.title = 'No tcg_id — relink via Add Card search';
+    refreshBtn.title = 'No price ID — relink via Add Card search';
   }
 
   // Location + listed (inline editable, auto-saves on change)
@@ -5731,17 +5769,21 @@ async function refreshSingleCardPrice(cardId) {
   const card = await db.cards.get(cardId);
   if (!card) return { error: 'Card not found' };
   if (card.category !== 'Pokemon') return { error: 'Auto-pricing only for Pokemon in MVP' };
-  if (!card.tcg_id) return { error: 'No tcg_id — relink via Add Card search' };
+  // Cards can be priced via tcg_id (TCG API) or ppt_id (PPT-only cards like promos)
+  if (!card.tcg_id && !card.ppt_id) return { error: 'No price ID — relink via Add Card search' };
 
   const settings = await getSettings();
   const key = (settings && settings.ppt_api_key || '').trim();
 
   let price = null, source = null;
-  // Try PPT first (more current)
+  // Try PPT first (more current; works for both tcg_id cards and PPT-only promos)
   if (key) {
     try {
-      const url = `${PPT_BASE}/cards?tcgPlayerId=${encodeURIComponent(card.tcg_id)}&limit=1`;
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
+      // Use ppt_id directly if available (promo cards), otherwise look up by tcgPlayerId
+      const pptEndpoint = card.ppt_id
+        ? `/cards?id=${encodeURIComponent(card.ppt_id)}&limit=1`
+        : `/cards?tcgPlayerId=${encodeURIComponent(card.tcg_id)}&limit=1`;
+      const r = await pptFetch(pptEndpoint, key);
       if (r.ok) {
         const body = await r.json();
         const list = Array.isArray(body) ? body : (body.data || body.cards || body.results || []);
@@ -5752,8 +5794,8 @@ async function refreshSingleCardPrice(cardId) {
       }
     } catch (e) { /* fall through */ }
   }
-  // Fall back to Pokemon TCG API
-  if (price == null) {
+  // Fall back to Pokemon TCG API (only if we have a tcg_id)
+  if (price == null && card.tcg_id) {
     try {
       const url = `${TCG_BASE}/cards/${encodeURIComponent(card.tcg_id)}`;
       const r = await fetch(url);
