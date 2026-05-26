@@ -1642,6 +1642,7 @@
   <nav class="tabs">
     <button class="tab active" data-tab="collection">Collection</button>
     <button class="tab" data-tab="wishlist">Wishlist <span id="tab-wl-count" style="color:var(--muted);font-size:11px;margin-left:3px;"></span></button>
+    <button class="tab" data-tab="psa">🎯 PSA Advisor</button>
   </nav>
   <div class="header-actions">
     <div class="search-wrap"><input type="search" id="global-search" placeholder="Search…" disabled title="Coming in Milestone 4"></div>
@@ -1885,6 +1886,260 @@
       <button class="primary" onclick="document.getElementById('wl-add-btn').click()" style="padding:9px 16px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:white;cursor:pointer;font:inherit;">➕ Add your first wishlist card</button>
     </div>
   </section>
+
+  <!-- =========== PSA Advisor Tab =========== -->
+  <section id="psa-tab" hidden>
+    <div style="max-width:1200px;margin:0 auto;padding:20px 24px;">
+
+      <!-- Header row with reset button -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h2 style="margin:0;font-size:17px;font-weight:600;">PSA Advisor <span style="color:var(--muted);font-weight:400;font-size:13px;margin-left:8px;">grade or sell raw — backed by math</span></h2>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">Standalone: search any card. Or click <strong>🎯 PSA Eval</strong> on a vault card to pre-fill.</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button id="psa-reset-btn" class="ghost">↺ Reset card</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;">
+        <!-- MAIN COLUMN -->
+        <div>
+          <!-- 1. Search -->
+          <div class="card" style="margin-bottom:16px;">
+            <h3 style="margin:0 0 12px;font-size:14px;font-weight:600;">1. Find a card</h3>
+            <!-- Pre-filled banner (shown when launched from vault card) -->
+            <div id="psa-prefill-banner" style="display:none;background:var(--accent-soft);border:1px solid var(--accent);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:13px;">
+              <strong id="psa-prefill-name"></strong>
+              <span id="psa-prefill-meta" style="color:var(--muted);margin-left:6px;"></span>
+              <button id="psa-prefill-clear" class="ghost" style="float:right;padding:2px 8px;font-size:11px;">✕ Clear</button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="psa-search-name" type="text" placeholder="Card name (e.g., Charizard ex)" style="flex:1;min-width:180px;">
+              <input id="psa-search-number" type="text" placeholder="Number (optional)" style="width:140px;">
+              <button id="psa-search-btn" class="primary">Search</button>
+              <button id="psa-manual-btn" title="Enter card details manually">+ Manual</button>
+            </div>
+            <div id="psa-search-status" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
+            <div id="psa-search-results" class="results-grid hidden" style="max-height:320px;overflow-y:auto;"></div>
+          </div>
+
+          <!-- 2. Card detail + prices -->
+          <div id="psa-detail-section" class="card hidden" style="margin-bottom:16px;">
+            <h3 style="margin:0 0 12px;font-size:14px;font-weight:600;">2. Confirm prices</h3>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;">
+              <div style="flex-shrink:0;">
+                <img id="psa-card-image" src="" alt="" style="width:140px;border-radius:8px;display:block;" onerror="this.style.opacity='.2'">
+              </div>
+              <div style="flex:1;min-width:220px;">
+                <div style="font-size:16px;font-weight:700;margin-bottom:4px;" id="psa-card-name"></div>
+                <div style="font-size:12px;color:var(--muted);margin-bottom:12px;" id="psa-card-meta"></div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                  <div>
+                    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:block;margin-bottom:4px;">
+                      Raw market <span id="psa-raw-badge" style="font-size:10px;background:var(--accent-soft);color:var(--accent);padding:1px 5px;border-radius:3px;font-weight:500;text-transform:none;letter-spacing:0;">auto</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:4px;"><span style="color:var(--muted);font-size:13px;">$</span><input type="number" step="0.01" id="psa-price-raw" style="flex:1;"></div>
+                  </div>
+                  <div>
+                    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:block;margin-bottom:4px;">
+                      PSA 10 sold <span id="psa-psa10-badge" style="font-size:10px;background:#f3f4f6;color:var(--muted);padding:1px 5px;border-radius:3px;font-weight:500;text-transform:none;letter-spacing:0;">manual</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:4px;"><span style="color:var(--muted);font-size:13px;">$</span><input type="number" step="0.01" id="psa-price-psa10" style="flex:1;"></div>
+                  </div>
+                  <div>
+                    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:block;margin-bottom:4px;">
+                      PSA 9 sold <span id="psa-psa9-badge" style="font-size:10px;background:#f3f4f6;color:var(--muted);padding:1px 5px;border-radius:3px;font-weight:500;text-transform:none;letter-spacing:0;">manual</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:4px;"><span style="color:var(--muted);font-size:13px;">$</span><input type="number" step="0.01" id="psa-price-psa9" style="flex:1;"></div>
+                  </div>
+                  <div>
+                    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:block;margin-bottom:4px;">PSA &lt;9 fallback</label>
+                    <div style="display:flex;align-items:center;gap:4px;"><span style="color:var(--muted);font-size:13px;">$</span><input type="number" step="0.01" id="psa-price-psa8" style="flex:1;"></div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                  <a id="psa-pricecharting-btn" href="#" target="_blank" rel="noopener" style="font-size:12px;padding:5px 10px;border:1px solid var(--border);border-radius:5px;text-decoration:none;color:var(--text);">🔎 PriceCharting</a>
+                  <a id="psa-ppt-web-btn" href="#" target="_blank" rel="noopener" style="font-size:12px;padding:5px 10px;border:1px solid var(--border);border-radius:5px;text-decoration:none;color:var(--text);">📊 PSA Analysis</a>
+                  <a id="psa-ebay-btn" href="#" target="_blank" rel="noopener" style="font-size:12px;padding:5px 10px;border:1px solid var(--border);border-radius:5px;text-decoration:none;color:var(--text);">📦 eBay sold</a>
+                </div>
+                <div style="font-size:11px;color:var(--muted);">Take the <strong>median of the last 5 PSA sales</strong> and enter each grade's price above.</div>
+
+                <div style="margin-top:14px;">
+                  <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px;">Your estimate of PSA-10 probability</label>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <input type="range" id="psa-p10-slider" min="0" max="100" step="1" value="20" style="flex:1;">
+                    <div id="psa-p10-display" style="font-size:18px;font-weight:700;color:var(--accent);min-width:48px;text-align:right;">20%</div>
+                  </div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:4px;">Sharp pulls 20–35%. Played edges 5–15%. Centering off → halve it.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Decision -->
+          <div id="psa-decision-section" class="card hidden" style="margin-bottom:16px;">
+            <h3 style="margin:0 0 12px;font-size:14px;font-weight:600;">3. Decision</h3>
+            <div id="psa-big-rec" style="font-size:22px;font-weight:800;padding:16px;border-radius:8px;margin-bottom:12px;text-align:center;"></div>
+            <div id="psa-interpret" style="font-size:13px;line-height:1.6;margin-bottom:16px;padding:12px;background:var(--bg);border-radius:6px;"></div>
+
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+              <div style="background:var(--bg);border-radius:6px;padding:12px;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px;">Net if sold raw</div>
+                <div id="psa-m-raw" style="font-size:18px;font-weight:700;">—</div>
+                <div style="font-size:10px;color:var(--muted);">After fees + shipping</div>
+              </div>
+              <div style="background:var(--bg);border-radius:6px;padding:12px;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px;">Expected graded net</div>
+                <div id="psa-m-graded" style="font-size:18px;font-weight:700;">—</div>
+                <div style="font-size:10px;color:var(--muted);">Probability-weighted</div>
+              </div>
+              <div id="psa-m-evgain-card" style="background:var(--bg);border-radius:6px;padding:12px;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px;">EV gain from grading</div>
+                <div id="psa-m-evgain" style="font-size:18px;font-weight:700;">—</div>
+                <div style="font-size:10px;color:var(--muted);">Graded net minus raw net</div>
+              </div>
+              <div style="background:var(--bg);border-radius:6px;padding:12px;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px;">Breakeven p(PSA 10)</div>
+                <div id="psa-m-breakeven" style="font-size:18px;font-weight:700;">—</div>
+                <div style="font-size:10px;color:var(--muted);">Time-adjusted minimum</div>
+              </div>
+              <div id="psa-m-margin-card" style="background:var(--bg);border-radius:6px;padding:12px;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px;">Margin vs breakeven</div>
+                <div id="psa-m-margin" style="font-size:18px;font-weight:700;">—</div>
+                <div style="font-size:10px;color:var(--muted);">Your p(10) − breakeven</div>
+              </div>
+              <div id="psa-m-timeev-card" style="background:var(--bg);border-radius:6px;padding:12px;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px;">Time-adj. EV gain</div>
+                <div id="psa-m-timeev" style="font-size:18px;font-weight:700;">—</div>
+                <div style="font-size:10px;color:var(--muted);">After PSA turnaround cost</div>
+              </div>
+            </div>
+
+            <h4 style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 8px;">Sensitivity to your PSA-10 estimate</h4>
+            <div style="position:relative;height:220px;"><canvas id="psa-sensitivity-chart"></canvas></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px;">Curve shows EV gain ($) across all possible PSA-10 probabilities. Where the curve crosses zero is the breakeven.</div>
+
+            <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+              <button id="psa-save-btn" class="primary">💾 Save Decision</button>
+              <button id="psa-clear-btn" class="ghost">Clear card</button>
+            </div>
+          </div>
+
+          <!-- 4. Decision history -->
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+              <h3 style="margin:0;font-size:14px;font-weight:600;">Decision History</h3>
+              <div style="display:flex;gap:8px;">
+                <button id="psa-export-csv-btn">⬇ Export CSV</button>
+                <button id="psa-clear-all-btn" class="ghost">🗑 Clear all</button>
+              </div>
+            </div>
+            <div id="psa-history-empty" style="text-align:center;padding:32px;color:var(--muted);font-size:13px;">No decisions saved yet. Evaluate a card and click <strong>Save Decision</strong>.</div>
+            <div style="overflow-x:auto;">
+              <table class="collection" id="psa-history-table" style="display:none;">
+                <thead>
+                  <tr>
+                    <th>Date</th><th>Card</th><th>Set</th><th>#</th>
+                    <th>Raw</th><th>PSA 10</th><th>PSA 9</th>
+                    <th>p(10)</th><th>Breakeven</th><th>Time-adj EV</th><th>Decision</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="psa-history-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SETTINGS COLUMN -->
+        <div style="position:sticky;top:80px;align-self:start;">
+          <div class="card">
+            <h3 style="margin:0 0 14px;font-size:14px;font-weight:600;">PSA Settings <span style="font-weight:400;color:var(--muted);font-size:11px;">(shared with vault settings)</span></h3>
+            <div style="font-size:12px;color:var(--accent);margin-bottom:12px;">Changes here are saved to vault settings automatically.</div>
+
+            <div style="margin-bottom:16px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;">PSA Grading Costs</div>
+              <div style="display:grid;gap:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Fee per card <span style="color:var(--muted);font-size:11px;">(Value $25 · Eco $49.99)</span></label>
+                  <input type="number" step="0.01" id="psa-s-fee" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Ship to PSA (per card)</label>
+                  <input type="number" step="0.01" id="psa-s-ship-out" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Return ship from PSA</label>
+                  <input type="number" step="0.01" id="psa-s-ship-in" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Supplies (savers, etc.)</label>
+                  <input type="number" step="0.01" id="psa-s-supplies" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Turnaround (months)</label>
+                  <input type="number" step="0.1" id="psa-s-months" style="width:80px;">
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-bottom:16px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;">TCGPlayer Selling Fees</div>
+              <div style="display:grid;gap:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Marketplace commission %</label>
+                  <input type="number" step="0.1" id="psa-s-commission" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Pro fee % (0 if not Pro)</label>
+                  <input type="number" step="0.1" id="psa-s-pro" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Payment processing %</label>
+                  <input type="number" step="0.1" id="psa-s-pay-pct" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Payment fixed fee $</label>
+                  <input type="number" step="0.01" id="psa-s-pay-fix" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Raw card shipping $</label>
+                  <input type="number" step="0.01" id="psa-s-raw-ship" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Graded card shipping $</label>
+                  <input type="number" step="0.01" id="psa-s-graded-ship" style="width:80px;">
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-bottom:16px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;">Probability & Decision Rules</div>
+              <div style="display:grid;gap:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">p(PSA 9 | not 10) %</label>
+                  <input type="number" step="1" id="psa-s-p9cond" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Min EV advantage $</label>
+                  <input type="number" step="0.5" id="psa-s-min-edge" style="width:80px;">
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <label style="font-size:12px;">Annual hurdle rate %</label>
+                  <input type="number" step="0.5" id="psa-s-hurdle" style="width:80px;">
+                </div>
+              </div>
+            </div>
+
+            <button id="psa-save-settings-btn" class="primary" style="width:100%;">Save Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <!-- =========== Settings panel =========== -->
@@ -2113,6 +2368,7 @@
       <button id="cd-refresh-btn" class="primary">↻ Refresh</button>
       <button id="cd-edit-btn">✏ Edit</button>
       <button id="cd-duplicate-btn">📑 Duplicate</button>
+      <button id="cd-psa-eval-btn" title="Evaluate this card in the PSA Advisor">🎯 PSA Eval</button>
       <button id="cd-delete-btn" class="danger">🗑 Delete</button>
     </div>
   </div>
@@ -4267,7 +4523,9 @@ async function switchTab(tab) {
   });
   document.getElementById('collection-tab').hidden = (tab !== 'collection');
   document.getElementById('wishlist-tab').hidden = (tab !== 'wishlist');
+  document.getElementById('psa-tab').hidden = (tab !== 'psa');
   if (tab === 'wishlist') await renderWishlist();
+  if (tab === 'psa') await initPsaTab();
 }
 
 // ============================================================
@@ -5983,6 +6241,12 @@ function setupCardDetailPanel() {
       openAddCard(card);
     }
   });
+  document.getElementById('cd-psa-eval-btn').addEventListener('click', async () => {
+    if (!cdState.cardId) return;
+    const id = cdState.cardId;
+    closeCardDetail();
+    await launchPsaFromCard(id);
+  });
   document.getElementById('cd-duplicate-btn').addEventListener('click', () => {
     if (!cdState.cardId) return;
     const id = cdState.cardId;
@@ -6514,6 +6778,689 @@ async function init() {
   // Fire-and-forget background auto-refresh if enabled in settings
   maybeAutoRefreshOnOpen();
 }
+
+
+// ============================================================
+// PSA ADVISOR — integrated from psa_decision_tool.html
+// ============================================================
+
+// --- PSA state ---
+let psaCurrentCard = null;
+let psaCurrentPrices = { raw: null, psa10: null, psa9: null, psa8: null };
+let psaPriceSource = { raw: 'manual', psa10: 'manual', psa9: 'manual', psa8: 'manual' };
+let psaSensChart = null;
+let psaHistory = [];
+let psaSourceCardId = null; // vault card id when launched from detail panel
+
+// --- Load/save PSA history from IndexedDB settings store (piggyback as JSON blob) ---
+async function psaLoadHistory() {
+  const s = await getSettings();
+  try { psaHistory = JSON.parse(s.psa_decision_history || '[]'); } catch(e) { psaHistory = []; }
+}
+async function psaSaveHistory() {
+  await updateSettings({ psa_decision_history: JSON.stringify(psaHistory) });
+}
+
+// --- PSA math engine (ported from psa_decision_tool.html) ---
+function psaTcgFeeRate(s) {
+  return (s.tcg_commission + s.tcg_pro_fee + s.tcg_pay_pct) / 100;
+}
+function psaNetFromSale(price, shipping, s) {
+  if (price == null || isNaN(price)) return null;
+  return price * (1 - psaTcgFeeRate(s)) - s.tcg_pay_fix - shipping;
+}
+function psaGradingCost(s) {
+  return s.psa_fee + s.psa_ship_out + s.psa_ship_in + s.psa_supplies;
+}
+function psaCompute(prices, p10pct, s) {
+  const p10 = p10pct / 100;
+  const q9 = s.p9_cond / 100;
+  const p9 = (1 - p10) * q9;
+  const pLow = (1 - p10) * (1 - q9);
+  const netRaw = psaNetFromSale(prices.raw, s.raw_ship, s);
+  const net10 = psaNetFromSale(prices.psa10, s.graded_ship, s);
+  const net9 = psaNetFromSale(prices.psa9, s.graded_ship, s);
+  const netLow = psaNetFromSale(prices.psa8, s.graded_ship, s);
+  const cost = psaGradingCost(s);
+  if ([netRaw, net10, net9, netLow].some(v => v == null)) return { ready: false };
+  const expectedGraded = p10 * net10 + p9 * net9 + pLow * netLow - cost;
+  const evGain = expectedGraded - netRaw;
+  const mNot10 = q9 * net9 + (1 - q9) * netLow;
+  let breakeven = null, breakevenTime = null;
+  if (Math.abs(net10 - mNot10) >= 1e-9) {
+    breakeven = (netRaw + cost - mNot10) / (net10 - mNot10);
+    const r = s.hurdle / 100;
+    const discount = Math.pow(1 + r, s.psa_months / 12);
+    const expectedGradedTime = expectedGraded / discount;
+    const timeEvGain = expectedGradedTime - netRaw;
+    breakevenTime = (netRaw * discount + cost - mNot10) / (net10 - mNot10);
+    const marginTime = p10 - breakevenTime;
+    function tierOf(m, be) {
+      if (be != null && be < 0) return 'STRONG GRADE';
+      if (be != null && be > 1) return 'STRONG SELL';
+      if (m == null) return 'TOSS-UP';
+      if (m >= 0.20) return 'STRONG GRADE';
+      if (m >= 0.05) return 'WEAK GRADE';
+      if (m > -0.05) return 'TOSS-UP';
+      if (m > -0.20) return 'WEAK SELL';
+      return 'STRONG SELL';
+    }
+    const tier = tierOf(marginTime, breakevenTime);
+    return {
+      ready: true, p10, p9, pLow, netRaw, net10, net9, netLow, cost,
+      expectedGraded, evGain, breakeven, breakevenTime,
+      expectedGradedTime, timeEvGain, tier,
+      margin: p10 - breakeven, marginTime
+    };
+  }
+  return { ready: false };
+}
+
+// --- Helper formatters ---
+function psaFmt$(v) { return v == null || isNaN(v) ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function psaFmtBe(be) {
+  if (be == null) return '—';
+  if (be < 0) return '< 0% (always grade)';
+  if (be > 1) return '> 100% (never grade)';
+  return (be * 100).toFixed(1) + '%';
+}
+function psaEscHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// --- Badge helper ---
+function psaSetBadge(id, kind) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (kind === 'auto') {
+    el.style.background = 'var(--accent-soft)'; el.style.color = 'var(--accent)';
+  } else {
+    el.style.background = '#f3f4f6'; el.style.color = 'var(--muted)';
+  }
+  el.textContent = kind;
+}
+
+// --- Settings helpers ---
+function psaSettingsToUI(s) {
+  const map = {
+    'psa-s-fee': s.psa_fee, 'psa-s-ship-out': s.psa_ship_out, 'psa-s-ship-in': s.psa_ship_in,
+    'psa-s-supplies': s.psa_supplies, 'psa-s-months': s.psa_months,
+    'psa-s-commission': s.tcg_commission, 'psa-s-pro': s.tcg_pro_fee,
+    'psa-s-pay-pct': s.tcg_pay_pct, 'psa-s-pay-fix': s.tcg_pay_fix,
+    'psa-s-raw-ship': s.raw_ship, 'psa-s-graded-ship': s.graded_ship,
+    'psa-s-p9cond': s.p9_cond, 'psa-s-min-edge': s.min_edge, 'psa-s-hurdle': s.hurdle
+  };
+  Object.entries(map).forEach(([id, val]) => { const el = document.getElementById(id); if (el) el.value = val; });
+}
+function psaUIToSettings() {
+  return {
+    psa_fee:        Number(document.getElementById('psa-s-fee').value),
+    psa_ship_out:   Number(document.getElementById('psa-s-ship-out').value),
+    psa_ship_in:    Number(document.getElementById('psa-s-ship-in').value),
+    psa_supplies:   Number(document.getElementById('psa-s-supplies').value),
+    psa_months:     Number(document.getElementById('psa-s-months').value),
+    tcg_commission: Number(document.getElementById('psa-s-commission').value),
+    tcg_pro_fee:    Number(document.getElementById('psa-s-pro').value),
+    tcg_pay_pct:    Number(document.getElementById('psa-s-pay-pct').value),
+    tcg_pay_fix:    Number(document.getElementById('psa-s-pay-fix').value),
+    raw_ship:       Number(document.getElementById('psa-s-raw-ship').value),
+    graded_ship:    Number(document.getElementById('psa-s-graded-ship').value),
+    p9_cond:        Number(document.getElementById('psa-s-p9cond').value),
+    min_edge:       Number(document.getElementById('psa-s-min-edge').value),
+    hurdle:         Number(document.getElementById('psa-s-hurdle').value)
+  };
+}
+
+// --- pokemonCoreName helper (strip variant prefixes/suffixes for PSA Analysis URL) ---
+function psaCoreName(name) {
+  if (!name) return '';
+  let s = ' ' + name + ' ';
+  s = s.replace(/\s(mega|m|shining|dark|light|alolan|galarian|hisuian|paldean|radiant|crystal|delta)\s/gi, ' ');
+  s = s.replace(/\s(ex|gx|v|vmax|vstar|break|lv\.?x|legend|tag\steam|prism\sstar)(\s.*)?$/i, ' ');
+  s = s.replace(/\s[xy]\s*$/i, ' ');
+  return s.replace(/\s+/g, ' ').trim() || name;
+}
+
+// --- extractPsaFromEbay (ported from PSA tool) ---
+function psaExtractFromEbay(ebay) {
+  if (!ebay || typeof ebay !== 'object') return null;
+  function pick(grade) {
+    const g = ebay['psa' + grade] ?? ebay[grade] ?? ebay['PSA ' + grade] ?? ebay['PSA' + grade];
+    if (g == null) return null;
+    if (typeof g === 'number') return g;
+    if (typeof g === 'object') {
+      const salesArr = g.recentSales || g.sales || g.history || [];
+      if (Array.isArray(salesArr) && salesArr.length) {
+        const nums = salesArr.map(s => Number(s.price ?? s.soldPrice ?? s.amount)).filter(n => !isNaN(n));
+        const m = psaMedian(nums);
+        if (m != null) return m;
+      }
+      return g.median ?? g.avg ?? g.average ?? g.price ?? g.market ?? null;
+    }
+    return null;
+  }
+  return { psa10: pick(10), psa9: pick(9), psa8: pick(8) };
+}
+function psaMedian(arr) {
+  if (!arr || !arr.length) return null;
+  const s = [...arr].slice(0, 5).sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// --- deepFindPsa (ported from PSA tool) ---
+function psaDeepFind(obj, targetGrade) {
+  if (obj == null || typeof obj !== 'object') return null;
+  const tStr = String(targetGrade);
+  const matches = [];
+  function walk(o, path) {
+    if (o == null || typeof o !== 'object') return;
+    if (Array.isArray(o)) { o.forEach((v, i) => walk(v, path + '[' + i + ']')); return; }
+    for (const [k, v] of Object.entries(o)) {
+      const klc = String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isGradeKey = (klc === 'psa' + tStr) || (klc === tStr) || (klc === 'grade' + tStr);
+      if (isGradeKey) {
+        if (typeof v === 'number' && v > 0) matches.push(v);
+        else if (typeof v === 'object' && v != null) {
+          const nested = v.median ?? v.avg ?? v.price ?? v.market ?? null;
+          if (typeof nested === 'number' && nested > 0) matches.push(nested);
+        }
+      }
+      walk(v, path + '.' + k);
+    }
+  }
+  walk(obj, '$');
+  return matches.length ? matches[0] : null;
+}
+
+// --- fetchFullCardForPsa (re-uses vault's pptFetch with CORS proxy) ---
+async function psaFetchFullCard(card) {
+  const s = await getSettings();
+  const key = (s.ppt_api_key || '').trim();
+  if (!key) return { error: 'No PPT API key set — enter prices manually.' };
+  const params = new URLSearchParams({ includeEbay: 'true', includeBoth: 'true', limit: '5' });
+  if (card.tcgPlayerId) params.set('tcgPlayerId', String(card.tcgPlayerId));
+  else {
+    const search = [card.name, String(card.number || '').split('/')[0].trim()].filter(Boolean).join(' ');
+    params.set('search', search);
+  }
+  try {
+    const r = await pptFetch('/cards?' + params.toString(), key);
+    const body = await r.json();
+    if (!r.ok) return { error: r.status + ': ' + (body.message || body.error || '') };
+    const list = Array.isArray(body) ? body : (body.data || body.cards || body.results || []);
+    if (!list.length) return { error: 'No records returned for this card.' };
+    let pick = list[0];
+    for (const it of list) {
+      const num = it.cardNumber ?? it.number ?? '';
+      if (String(num) === String(card.number) && (!card.set || (it.setName ?? it.set?.name ?? '') === card.set)) { pick = it; break; }
+    }
+    return { card: normalizePpt(pick), rawPick: pick };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// --- PSA search ---
+function psaSetStatus(msg, busy) {
+  const el = document.getElementById('psa-search-status');
+  el.innerHTML = '';
+  if (busy) {
+    const sp = document.createElement('span'); sp.className = 'loading'; el.appendChild(sp);
+    el.appendChild(document.createTextNode(' ' + msg));
+  } else {
+    el.textContent = msg;
+  }
+}
+
+async function psaDoSearch() {
+  const name = document.getElementById('psa-search-name').value.trim();
+  const number = document.getElementById('psa-search-number').value.trim();
+  const grid = document.getElementById('psa-search-results');
+  if (!name && !number) { psaSetStatus('Type a card name to search.'); return; }
+  grid.classList.add('hidden');
+  const s = await getSettings();
+  const hasKey = !!(s.ppt_api_key || '').trim();
+  let combined = [];
+
+  if (hasKey) {
+    psaSetStatus('Searching PokemonPriceTracker…', true);
+    try {
+      const list = await searchPokemonPriceTracker(name, number);
+      if (list && list.length) combined = combined.concat(list);
+    } catch (e) { /* fall through */ }
+  }
+
+  psaSetStatus('Searching Pokemon TCG API…', true);
+  try {
+    const list = await searchPokemonTcg(name, number);
+    if (list && list.length) {
+      const seen = new Set(combined.map(c => c.tcgPlayerId ? 'id:' + c.tcgPlayerId : (c.name + '|' + c.number).toLowerCase()));
+      list.forEach(c => {
+        const k = c.tcgPlayerId ? 'id:' + c.tcgPlayerId : (c.name + '|' + c.number).toLowerCase();
+        if (!seen.has(k)) { seen.add(k); combined.push(c); }
+      });
+    }
+  } catch (e) { /* fall through */ }
+
+  if (!combined.length && number) {
+    try { const list = await searchPokemonTcg(name, ''); if (list && list.length) combined = list; } catch(e) {}
+  }
+
+  if (!combined.length) { psaSetStatus('No cards matched. Check spelling or try a shorter name.'); return; }
+  psaSetStatus(combined.length + ' match' + (combined.length === 1 ? '' : 'es') + '. Click one to evaluate.');
+  psaRenderResults(combined);
+}
+
+function psaRenderResults(cards) {
+  const grid = document.getElementById('psa-search-results');
+  grid.innerHTML = '';
+  grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:12px;max-height:320px;overflow-y:auto;';
+  cards.forEach(card => {
+    const tile = document.createElement('div');
+    tile.style.cssText = 'border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;transition:border-color .12s;';
+    tile.onmouseenter = () => tile.style.borderColor = 'var(--accent)';
+    tile.onmouseleave = () => tile.style.borderColor = 'var(--border)';
+    if (card.image) {
+      const img = document.createElement('img');
+      img.src = card.image; img.alt = card.name;
+      img.style.cssText = 'width:100%;border-radius:4px;display:block;margin-bottom:6px;';
+      img.loading = 'lazy'; img.onerror = () => img.style.display = 'none';
+      tile.appendChild(img);
+    }
+    const nm = document.createElement('div');
+    nm.style.cssText = 'font-size:12px;font-weight:600;line-height:1.3;margin-bottom:2px;';
+    nm.textContent = card.name; tile.appendChild(nm);
+    const st = document.createElement('div');
+    st.style.cssText = 'font-size:11px;color:var(--muted);';
+    st.textContent = (card.set || '?') + ' · ' + (card.number || '?');
+    tile.appendChild(st);
+    tile.addEventListener('click', () => psaSelectCard(card));
+    grid.appendChild(tile);
+  });
+  grid.classList.remove('hidden');
+}
+
+async function psaSelectCard(card) {
+  psaCurrentCard = card;
+  document.getElementById('psa-detail-section').classList.remove('hidden');
+
+  // Fill card identity
+  document.getElementById('psa-card-name').textContent = card.name;
+  document.getElementById('psa-card-meta').textContent =
+    (card.set || '—') + ' · #' + (card.number || '?') + (card.rarity ? ' · ' + card.rarity : '');
+  const img = document.getElementById('psa-card-image');
+  img.src = card.imageLarge || card.image || ''; img.style.opacity = '1';
+
+  // External links
+  const pcQ = encodeURIComponent((card.name + ' ' + (card.set || '') + ' ' + (card.number || '')).trim());
+  document.getElementById('psa-pricecharting-btn').href = 'https://www.pricecharting.com/search-products?type=prices&q=' + pcQ;
+  document.getElementById('psa-ppt-web-btn').href = 'https://www.pokemonpricetracker.com/psa-analysis?name=' + encodeURIComponent(psaCoreName(card.name));
+  const ebayQ = encodeURIComponent((card.name + ' ' + (card.set || '') + ' ' + (card.number || '') + ' PSA').trim());
+  document.getElementById('psa-ebay-btn').href = 'https://www.ebay.com/sch/i.html?_nkw=' + ebayQ + '&LH_Sold=1&LH_Complete=1';
+
+  // Reset prices
+  const raw = card.rawMarket;
+  psaCurrentPrices = { raw, psa10: null, psa9: null, psa8: null };
+  psaPriceSource = { raw: raw != null ? 'auto' : 'manual', psa10: 'manual', psa9: 'manual', psa8: 'manual' };
+  psaSetBadge('psa-raw-badge', psaPriceSource.raw);
+  psaSetBadge('psa-psa10-badge', 'manual'); psaSetBadge('psa-psa9-badge', 'manual');
+  document.getElementById('psa-price-raw').value = raw != null ? Number(raw).toFixed(2) : '';
+  document.getElementById('psa-price-psa10').value = '';
+  document.getElementById('psa-price-psa9').value = '';
+  document.getElementById('psa-price-psa8').value = '';
+
+  // Try to fetch PSA prices from PPT
+  if (card.source !== 'manual') {
+    const s = await getSettings();
+    if ((s.ppt_api_key || '').trim()) {
+      psaSetStatus('Fetching PSA prices from PokemonPriceTracker…', true);
+      const result = await psaFetchFullCard(card);
+      if (!result.error) {
+        const full = result.card;
+        if (full.rawMarket != null && psaCurrentPrices.raw == null) {
+          psaCurrentPrices.raw = full.rawMarket;
+          document.getElementById('psa-price-raw').value = full.rawMarket.toFixed(2);
+          psaSetBadge('psa-raw-badge', 'auto');
+        }
+        const psa = psaExtractFromEbay(full.ebay) || { psa10: null, psa9: null, psa8: null };
+        if (psa.psa10 == null) psa.psa10 = psaDeepFind(result.rawPick, 10);
+        if (psa.psa9 == null)  psa.psa9  = psaDeepFind(result.rawPick, 9);
+        if (psa.psa8 == null)  psa.psa8  = psaDeepFind(result.rawPick, 8);
+        let filled = 0;
+        if (psa.psa10 != null) { psaCurrentPrices.psa10 = Number(psa.psa10); document.getElementById('psa-price-psa10').value = Number(psa.psa10).toFixed(2); psaSetBadge('psa-psa10-badge', 'auto'); filled++; }
+        if (psa.psa9  != null) { psaCurrentPrices.psa9  = Number(psa.psa9);  document.getElementById('psa-price-psa9').value  = Number(psa.psa9).toFixed(2);  psaSetBadge('psa-psa9-badge', 'auto');  filled++; }
+        if (psa.psa8  != null) { psaCurrentPrices.psa8  = Number(psa.psa8);  document.getElementById('psa-price-psa8').value  = Number(psa.psa8).toFixed(2); }
+        psaSetStatus(filled > 0 ? filled + ' PSA price' + (filled === 1 ? '' : 's') + ' auto-filled — confirm or override.' : 'Card selected. PSA prices not available on free tier — enter manually using lookup buttons.');
+      } else {
+        psaSetStatus('Card selected. ' + result.error);
+      }
+    } else {
+      psaSetStatus('Card selected. Set your PPT API key in vault settings for PSA price auto-fill.');
+    }
+  } else {
+    psaSetStatus('Manual card entry. Use the lookup buttons to find PSA prices.');
+  }
+
+  document.getElementById('psa-detail-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  psaRecompute();
+}
+
+function psaManualEntry() {
+  const name = document.getElementById('psa-search-name').value.trim();
+  if (!name) { psaSetStatus('Type a card name first.'); return; }
+  const number = document.getElementById('psa-search-number').value.trim();
+  const setName = prompt('Set name for "' + name + '" (e.g., "XY Mega Evolution Promos"):', '') || '';
+  psaSelectCard({ id: 'manual-' + Date.now(), source: 'manual', name, set: setName, number, rarity: '', image: '', imageLarge: '', rawMarket: null, tcgUrl: '', tcgPlayerId: null });
+}
+
+// --- Recompute and render decision ---
+async function psaRecompute() {
+  if (!psaCurrentCard) return;
+  const s = await getSettings();
+  const p10pct = Number(document.getElementById('psa-p10-slider').value);
+  document.getElementById('psa-p10-display').textContent = p10pct + '%';
+  ['raw', 'psa10', 'psa9', 'psa8'].forEach(k => {
+    const v = document.getElementById('psa-price-' + k).value;
+    psaCurrentPrices[k] = v === '' ? null : Number(v);
+  });
+  const result = psaCompute(psaCurrentPrices, p10pct, s);
+  const decEl = document.getElementById('psa-decision-section');
+  if (!result.ready) { decEl.classList.add('hidden'); return; }
+  decEl.classList.remove('hidden');
+  psaRenderDecision(result, p10pct, s);
+  psaDrawSensitivity(s);
+}
+
+function psaRenderDecision(r, p10pct, s) {
+  const recEl = document.getElementById('psa-big-rec');
+  const colors = {
+    'STRONG GRADE': { bg: '#dcfce7', color: '#15803d' },
+    'WEAK GRADE':   { bg: '#d1fae5', color: '#059669' },
+    'TOSS-UP':      { bg: '#fef3c7', color: '#92400e' },
+    'WEAK SELL':    { bg: '#fee2e2', color: '#b91c1c' },
+    'STRONG SELL':  { bg: '#fecaca', color: '#991b1b' }
+  };
+  const col = colors[r.tier] || { bg: '#f3f4f6', color: 'var(--text)' };
+  recEl.style.background = col.bg; recEl.style.color = col.color;
+  recEl.innerHTML = r.tier + '<div style="font-size:12px;font-weight:400;margin-top:4px;opacity:.8;">based on time-adjusted probability margin</div>';
+
+  document.getElementById('psa-m-raw').textContent = psaFmt$(r.netRaw);
+  document.getElementById('psa-m-graded').textContent = psaFmt$(r.expectedGraded);
+  document.getElementById('psa-m-evgain').textContent = psaFmt$(r.evGain);
+  document.getElementById('psa-m-breakeven').textContent = psaFmtBe(r.breakevenTime);
+  document.getElementById('psa-m-margin').textContent = r.marginTime == null ? '—' : (r.marginTime * 100 > 0 ? '+' : '') + (r.marginTime * 100).toFixed(1) + 'pp';
+  document.getElementById('psa-m-timeev').textContent = psaFmt$(r.timeEvGain);
+
+  // Color metric cards
+  function tonify(id, val) {
+    const el = document.getElementById(id);
+    el.style.background = val == null ? 'var(--bg)' : val >= 0 ? '#dcfce7' : '#fee2e2';
+  }
+  tonify('psa-m-evgain-card', r.evGain); tonify('psa-m-margin-card', r.marginTime); tonify('psa-m-timeev-card', r.timeEvGain);
+
+  // Interpretation text
+  const interp = document.getElementById('psa-interpret');
+  const beStr = psaFmtBe(r.breakevenTime);
+  const marStr = r.marginTime == null ? '—' : (r.marginTime * 100 >= 0 ? '+' : '') + (r.marginTime * 100).toFixed(1) + 'pp';
+  let txt;
+  switch (r.tier) {
+    case 'STRONG GRADE':
+      txt = r.breakevenTime != null && r.breakevenTime < 0
+        ? '<strong>Strong grade.</strong> PSA 9 / PSA 8 prices alone beat raw — grading wins even at zero probability of a 10. Submit it.'
+        : '<strong>Strong grade.</strong> Your ' + p10pct + '% estimate sits ' + marStr + ' above the ' + beStr + ' breakeven. Time-adj. gain: <strong>' + psaFmt$(r.timeEvGain) + '</strong>.';
+      break;
+    case 'WEAK GRADE':
+      txt = '<strong>Weak grade.</strong> Your ' + p10pct + '% estimate is ' + marStr + ' above ' + beStr + ' breakeven — positive but slim. Grade only if you are confident in your condition read.';
+      break;
+    case 'TOSS-UP':
+      txt = '<strong>Toss-up.</strong> Your ' + p10pct + '% estimate is within 5pp of the ' + beStr + ' breakeven. The math does not favor either path — pick based on your liquidity preference.';
+      break;
+    case 'WEAK SELL':
+      txt = '<strong>Weak sell.</strong> Your ' + p10pct + '% estimate is ' + marStr + ' below the ' + beStr + ' breakeven. Sell raw unless you are being unduly pessimistic about condition.';
+      break;
+    case 'STRONG SELL':
+      txt = r.breakevenTime != null && r.breakevenTime > 1
+        ? '<strong>Strong sell.</strong> Even a guaranteed PSA 10 cannot overcome grading cost. Sell raw and move on.'
+        : '<strong>Strong sell.</strong> Your ' + p10pct + '% estimate is ' + marStr + ' below the ' + beStr + ' breakeven. Do not grade.';
+      break;
+    default: txt = 'Tier: ' + r.tier;
+  }
+  interp.innerHTML = txt;
+}
+
+async function psaDrawSensitivity(s) {
+  if (!s) s = await getSettings();
+  const ctx = document.getElementById('psa-sensitivity-chart');
+  const points = [];
+  for (let p = 0; p <= 100; p += 2) {
+    const r = psaCompute(psaCurrentPrices, p, s);
+    if (r.ready) points.push({ x: p, y: r.timeEvGain });
+  }
+  const userP = Number(document.getElementById('psa-p10-slider').value);
+  const userR = psaCompute(psaCurrentPrices, userP, s);
+  if (psaSensChart) psaSensChart.destroy();
+  psaSensChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'Time-adj. EV gain ($)', data: points, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.1)', borderWidth: 2, fill: true, pointRadius: 0, tension: .2 },
+        { label: 'Your estimate', data: userR.ready ? [{ x: userP, y: userR.timeEvGain }] : [], borderColor: '#dc2626', backgroundColor: '#dc2626', pointRadius: 6, pointHoverRadius: 8, showLine: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { type: 'linear', min: 0, max: 100, title: { display: true, text: 'p(PSA 10) %' } },
+        y: { title: { display: true, text: 'Time-adj. EV gain ($)' }, grid: { color: ctx => ctx.tick.value === 0 ? '#dc2626' : '#e1e5ec' } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+// --- History render ---
+function psaRenderHistory() {
+  const empty = document.getElementById('psa-history-empty');
+  const tbl = document.getElementById('psa-history-table');
+  const tbody = document.getElementById('psa-history-body');
+  if (!psaHistory.length) { empty.style.display = ''; tbl.style.display = 'none'; return; }
+  empty.style.display = 'none'; tbl.style.display = '';
+  tbody.innerHTML = '';
+  psaHistory.slice().reverse().forEach((h, revIdx) => {
+    const tr = document.createElement('tr');
+    const tier = h.tier || 'TOSS-UP';
+    const be = h.breakevenTime ?? h.breakeven;
+    const timeEv = h.timeEvGain ?? h.evGain;
+    const dt = h.ts ? new Date(h.ts) : null;
+    const dateStr = dt ? (dt.getMonth()+1) + '/' + dt.getDate() + ' ' + String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0') : '—';
+    const trueIdx = psaHistory.length - 1 - revIdx;
+    const tierColor = { 'STRONG GRADE': '#15803d', 'WEAK GRADE': '#059669', 'TOSS-UP': '#92400e', 'WEAK SELL': '#b91c1c', 'STRONG SELL': '#991b1b' }[tier] || 'inherit';
+    tr.innerHTML =
+      '<td style="white-space:nowrap;color:var(--muted);font-size:11px;">' + psaEscHtml(dateStr) + '</td>' +
+      '<td style="font-weight:500;">' + psaEscHtml(h.name || '—') + '</td>' +
+      '<td style="color:var(--muted);">' + psaEscHtml(h.set || '—') + '</td>' +
+      '<td>' + psaEscHtml(h.number || '—') + '</td>' +
+      '<td>' + psaFmt$(h.raw) + '</td>' +
+      '<td>' + psaFmt$(h.psa10) + '</td>' +
+      '<td>' + psaFmt$(h.psa9) + '</td>' +
+      '<td>' + (h.p10 || 0) + '%</td>' +
+      '<td>' + psaFmtBe(be) + '</td>' +
+      '<td style="font-weight:500;">' + psaFmt$(timeEv) + '</td>' +
+      '<td style="font-weight:700;color:' + tierColor + ';">' + tier + '</td>' +
+      '<td><button class="ghost" data-psaidx="' + trueIdx + '" style="padding:2px 8px;font-size:11px;">✕</button></td>';
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('[data-psaidx]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      psaHistory.splice(Number(btn.dataset.psaidx), 1);
+      await psaSaveHistory();
+      psaRenderHistory();
+    });
+  });
+}
+
+// --- CSV export ---
+async function psaExportCsv() {
+  if (!psaHistory.length) { toast('Nothing to export — save a decision first.'); return; }
+  const headers = ['Saved at','Card','Set','#','Raw','PSA 10','PSA 9','PSA <9','p(10)%','Breakeven%','Time-adj EV','Decision'];
+  const rows = psaHistory.map(h => {
+    const be = h.breakevenTime ?? h.breakeven;
+    return [h.ts||'', h.name||'', h.set||'', h.number||'',
+      h.raw == null ? '' : h.raw.toFixed(2), h.psa10 == null ? '' : h.psa10.toFixed(2),
+      h.psa9 == null ? '' : h.psa9.toFixed(2), h.psa8 == null ? '' : h.psa8.toFixed(2),
+      h.p10||'', be == null ? '' : (be*100).toFixed(2),
+      h.timeEvGain == null ? '' : h.timeEvGain.toFixed(2), h.tier||''];
+  });
+  const lines = [headers, ...rows].map(r => r.map(v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(',')).join('\r\n');
+  const blob = new Blob(['\uFEFF' + lines], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'psa_decisions_' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  toast('Exported ' + psaHistory.length + ' decision' + (psaHistory.length === 1 ? '' : 's'));
+}
+
+// --- PSA tab init (called when tab is first opened) ---
+let psaTabInited = false;
+async function initPsaTab() {
+  if (psaTabInited) return;
+  psaTabInited = true;
+
+  await psaLoadHistory();
+  psaRenderHistory();
+
+  const s = await getSettings();
+  psaSettingsToUI(s);
+
+  // Search
+  document.getElementById('psa-search-btn').addEventListener('click', psaDoSearch);
+  document.getElementById('psa-manual-btn').addEventListener('click', psaManualEntry);
+  document.getElementById('psa-search-name').addEventListener('keydown', e => { if (e.key === 'Enter') psaDoSearch(); });
+  document.getElementById('psa-search-number').addEventListener('keydown', e => { if (e.key === 'Enter') psaDoSearch(); });
+
+  // Price inputs → recompute
+  ['psa-price-raw','psa-price-psa10','psa-price-psa9','psa-price-psa8'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      const k = id.replace('psa-price-','');
+      const badgeMap = { raw: 'psa-raw-badge', psa10: 'psa-psa10-badge', psa9: 'psa-psa9-badge' };
+      if (badgeMap[k]) psaSetBadge(badgeMap[k], 'manual');
+      psaRecompute();
+    });
+  });
+  document.getElementById('psa-p10-slider').addEventListener('input', psaRecompute);
+
+  // Save decision
+  document.getElementById('psa-save-btn').addEventListener('click', async () => {
+    if (!psaCurrentCard) return;
+    const p10pct = Number(document.getElementById('psa-p10-slider').value);
+    const s = await getSettings();
+    const r = psaCompute(psaCurrentPrices, p10pct, s);
+    if (!r.ready) { toast('Fill all four prices first'); return; }
+    psaHistory.push({
+      ts: new Date().toISOString(),
+      name: psaCurrentCard.name, set: psaCurrentCard.set || '', number: psaCurrentCard.number || '',
+      vaultCardId: psaSourceCardId || null,
+      raw: psaCurrentPrices.raw, psa10: psaCurrentPrices.psa10, psa9: psaCurrentPrices.psa9, psa8: psaCurrentPrices.psa8,
+      p10: p10pct, breakeven: r.breakeven, breakevenTime: r.breakevenTime,
+      marginTime: r.marginTime, evGain: r.evGain, timeEvGain: r.timeEvGain, tier: r.tier
+    });
+    await psaSaveHistory();
+    psaRenderHistory();
+    toast('Decision saved');
+  });
+
+  document.getElementById('psa-clear-btn').addEventListener('click', () => {
+    document.getElementById('psa-detail-section').classList.add('hidden');
+    document.getElementById('psa-decision-section').classList.add('hidden');
+    psaCurrentCard = null; psaSourceCardId = null;
+    document.getElementById('psa-prefill-banner').style.display = 'none';
+  });
+  document.getElementById('psa-reset-btn').addEventListener('click', () => {
+    document.getElementById('psa-detail-section').classList.add('hidden');
+    document.getElementById('psa-decision-section').classList.add('hidden');
+    document.getElementById('psa-search-results').classList.add('hidden');
+    document.getElementById('psa-search-name').value = '';
+    document.getElementById('psa-search-number').value = '';
+    document.getElementById('psa-prefill-banner').style.display = 'none';
+    psaSetStatus(''); psaCurrentCard = null; psaSourceCardId = null;
+  });
+  document.getElementById('psa-prefill-clear').addEventListener('click', () => {
+    document.getElementById('psa-prefill-banner').style.display = 'none';
+    psaSourceCardId = null;
+  });
+
+  // Save settings
+  document.getElementById('psa-save-settings-btn').addEventListener('click', async () => {
+    const patch = psaUIToSettings();
+    await updateSettings(patch);
+    toast('PSA settings saved');
+    psaRecompute();
+  });
+
+  // Export / clear history
+  document.getElementById('psa-export-csv-btn').addEventListener('click', psaExportCsv);
+  document.getElementById('psa-clear-all-btn').addEventListener('click', async () => {
+    if (!psaHistory.length) { toast('Nothing to clear.'); return; }
+    if (!confirm('Delete all ' + psaHistory.length + ' saved decision' + (psaHistory.length === 1 ? '' : 's') + '?')) return;
+    psaHistory = [];
+    await psaSaveHistory();
+    psaRenderHistory();
+    toast('Decisions cleared');
+  });
+}
+
+// --- Launch PSA tab pre-filled from a vault card ---
+async function launchPsaFromCard(cardId) {
+  const card = await db.cards.get(cardId);
+  if (!card) return;
+  psaSourceCardId = cardId;
+  await switchTab('psa');
+
+  // Clear any previous search state before pre-filling
+  document.getElementById('psa-search-results').innerHTML = '';
+  document.getElementById('psa-search-results').classList.add('hidden');
+  document.getElementById('psa-detail-section').classList.add('hidden');
+  document.getElementById('psa-decision-section').classList.add('hidden');
+  psaSetStatus('');
+  psaCurrentCard = null;
+
+  // Fill search fields with card identity
+  document.getElementById('psa-search-name').value = card.name;
+  document.getElementById('psa-search-number').value = card.number || '';
+
+  // Show pre-fill banner
+  const banner = document.getElementById('psa-prefill-banner');
+  document.getElementById('psa-prefill-name').textContent = card.name;
+  document.getElementById('psa-prefill-meta').textContent =
+    (card.set ? card.set + ' · ' : '') + (card.number ? '#' + card.number : '') +
+    (card.condition ? ' · ' + card.condition : '');
+  banner.style.display = '';
+
+  // If card has a tcg_id or ppt_id, build a synthetic card object and select it directly
+  if (card.tcg_id || card.ppt_id) {
+    const s = await getSettings();
+    const priceRecord = await db.prices.where('[tcg_id+condition+ts]').between(
+      [card.tcg_id || '', card.condition || '', Dexie.minKey],
+      [card.tcg_id || '', card.condition || '', Dexie.maxKey]
+    ).last().catch(() => null);
+    const rawMarket = priceRecord ? priceRecord.market_price : (card._market || null);
+    const synthetic = {
+      id: card.tcg_id || card.ppt_id,
+      source: card.ppt_id && !card.tcg_id ? 'ppt' : 'tcg',
+      name: card.name, set: card.set || '', number: card.number || '',
+      rarity: card.rarity || '', image: card.image_url || '', imageLarge: card.image_url || '',
+      rawMarket, tcgUrl: '', tcgPlayerId: card.tcg_id || card.ppt_id
+    };
+    await psaSelectCard(synthetic);
+  } else {
+    // Fall back to search
+    psaSetStatus('Searching for this card…', true);
+    await psaDoSearch();
+  }
+}
+// ── END PSA ADVISOR ──────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
