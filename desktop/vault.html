@@ -1648,7 +1648,15 @@
     <div class="search-wrap"><input type="search" id="global-search" placeholder="Search…" disabled title="Coming in Milestone 4"></div>
     <button id="btn-add-card" title="Add a card (n)">➕ Add card</button>
     <button id="btn-import" title="Import a Collectr CSV">📥 Import</button>
-    <button id="btn-refresh-all" title="Refresh all stale prices (r)">↻ Refresh</button>
+    <div class="refresh-split" id="refresh-split-wrap" style="position:relative;display:inline-flex;">
+      <button id="btn-refresh-all" title="Refresh stale prices (r)" style="border-radius:6px 0 0 6px;border-right:none;">↻ Refresh stale</button>
+      <button id="btn-refresh-menu" title="More refresh options" style="border-radius:0 6px 6px 0;padding:9px 8px;font-size:11px;">▾</button>
+      <div id="refresh-dropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);z-index:200;min-width:200px;overflow:hidden;">
+        <button id="btn-refresh-stale" style="width:100%;text-align:left;border:none;border-radius:0;padding:10px 14px;font-size:13px;">↻ Refresh stale only</button>
+        <button id="btn-refresh-force" style="width:100%;text-align:left;border:none;border-radius:0;padding:10px 14px;font-size:13px;border-top:1px solid var(--bg);">⟳ Force refresh all</button>
+        <button id="btn-refresh-oldest" style="width:100%;text-align:left;border:none;border-radius:0;padding:10px 14px;font-size:13px;border-top:1px solid var(--bg);">📅 Refresh oldest 20</button>
+      </div>
+    </div>
     <button id="btn-settings" title="Settings">⚙</button>
   </div>
 </header>
@@ -1759,6 +1767,13 @@
         <option value="name-asc">Name (A → Z)</option>
         <option value="set-asc">Set (A → Z)</option>
       </select>
+      <span class="filter-label">Price ≥ $</span>
+      <input type="number" id="f-min-price" placeholder="e.g. 50" min="0" step="1" style="width:80px;">
+      <span class="filter-label">Quick</span>
+      <div style="display:inline-flex;gap:4px;">
+        <button id="f-top20-btn" class="clear-link" style="padding:5px 9px;border:1px solid var(--border);border-radius:5px;background:var(--card);font-size:12px;" title="Show top 20 most valuable cards">Top 20</button>
+        <button id="f-listed-btn" class="clear-link" style="padding:5px 9px;border:1px solid var(--border);border-radius:5px;background:var(--card);font-size:12px;" title="Show only cards listed on TCGPlayer">🏷 Listed</button>
+      </div>
       <button class="clear-link" id="f-clear">Clear filters</button>
       <span class="filter-spacer"></span>
       <button class="clear-link" id="f-sets-btn" title="View set completion" style="text-decoration:none;background:var(--card);color:var(--text);padding:5px 10px;border-radius:5px;border:1px solid var(--border);">📚 Sets</button>
@@ -3719,16 +3734,44 @@ function setupHeaderButtons() {
   document.getElementById('btn-add-card').addEventListener('click', () => openAddCard());
   document.getElementById('btn-empty-add').addEventListener('click', () => openAddCard());
 
-  // Refresh All — confirms if many stale; sequentially refreshes with throttling
+  // Refresh split button — dropdown logic
+  const refreshMenuBtn = document.getElementById('btn-refresh-menu');
+  const refreshDropdown = document.getElementById('refresh-dropdown');
+
+  // Toggle dropdown
+  refreshMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = refreshDropdown.style.display !== 'none';
+    refreshDropdown.style.display = isOpen ? 'none' : 'block';
+  });
+  // Close dropdown when clicking elsewhere
+  document.addEventListener('click', () => { refreshDropdown.style.display = 'none'; });
+
+  // Main button: refresh stale only
   document.getElementById('btn-refresh-all').addEventListener('click', async () => {
-    // Hold shift to force refresh (ignore cache)
-    const force = window.event && window.event.shiftKey;
-    await refreshAllStalePrices({ force });
+    await refreshAllStalePrices({});
   });
 
-  // Keyboard: 'r' triggers refresh, '/' focuses search, 'n' opens Add Card
+  // Dropdown option: refresh stale (same as main button)
+  document.getElementById('btn-refresh-stale').addEventListener('click', async () => {
+    refreshDropdown.style.display = 'none';
+    await refreshAllStalePrices({});
+  });
+
+  // Dropdown option: force refresh ALL (ignores staleness cutoff)
+  document.getElementById('btn-refresh-force').addEventListener('click', async () => {
+    refreshDropdown.style.display = 'none';
+    await refreshAllStalePrices({ force: true });
+  });
+
+  // Dropdown option: refresh oldest 20 cards only (credit-safe)
+  document.getElementById('btn-refresh-oldest').addEventListener('click', async () => {
+    refreshDropdown.style.display = 'none';
+    await refreshAllStalePrices({ oldestN: 20 });
+  });
+
+  // Keyboard: 'r' = refresh stale, '/' = search, 'n' = add card
   document.addEventListener('keydown', e => {
-    // Skip when typing in inputs
     if (e.target.matches('input, textarea, select')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'r') { document.getElementById('btn-refresh-all').click(); }
@@ -4439,23 +4482,46 @@ async function refreshAllStalePrices(options = {}) {
   const refreshHours = settings.refresh_interval_hours || 24;
   const allCards = await db.cards.toArray();
   const cutoff = Date.now() - refreshHours * 3600 * 1000;
-  const candidates = allCards.filter(c =>
-    c.category === 'Pokemon' && c.tcg_id &&
+  const hasKey = !!(settings.ppt_api_key || '').trim();
+
+  // Include cards with tcg_id OR ppt_id (promo cards use ppt_id only)
+  let candidates = allCards.filter(c =>
+    c.category === 'Pokemon' && (c.tcg_id || c.ppt_id) &&
     (options.force || !c.last_priced_at || new Date(c.last_priced_at).getTime() < cutoff)
   );
 
+  // If oldest-N mode, sort by last_priced_at ascending and cap
+  if (options.oldestN) {
+    candidates = allCards
+      .filter(c => c.category === 'Pokemon' && (c.tcg_id || c.ppt_id))
+      .sort((a, b) => {
+        const ta = a.last_priced_at ? new Date(a.last_priced_at).getTime() : 0;
+        const tb = b.last_priced_at ? new Date(b.last_priced_at).getTime() : 0;
+        return ta - tb;
+      })
+      .slice(0, options.oldestN);
+  }
+
   if (candidates.length === 0) {
-    if (!options.quiet) toast(`No stale Pokemon prices. All cards refreshed within ${refreshHours}h.`, '');
+    if (!options.quiet) toast(`No stale Pokemon prices. All cards refreshed within ${refreshHours}h.`);
     return;
   }
 
-  // Confirmation for big batches when user-triggered
-  if (!options.quiet && candidates.length > 50) {
-    const hasKey = !!(settings.ppt_api_key || '').trim();
-    const apiNote = hasKey
-      ? `Each card uses ~2 PPT credits (free tier: 100/day) + 1 Pokemon TCG API call (no key needed).`
-      : `Each card uses 1 Pokemon TCG API call (free, no key needed).`;
-    if (!confirm(`Refresh ${candidates.length} stale Pokemon prices?\n\n${apiNote}\n\nEstimated time: ~${Math.ceil(candidates.length * REFRESH_THROTTLE_MS / 1000)}s.`)) return;
+  // Credit estimate and confirmation for user-triggered refreshes
+  if (!options.quiet) {
+    const creditCost = hasKey ? candidates.length : 0; // PPT costs 1 credit/card
+    const creditWarn = hasKey && creditCost > 80
+      ? `⚠️ This will use ~${creditCost} of your 100 daily PPT credits.`
+      : hasKey
+        ? `~${creditCost} PPT credits will be used (100/day free).`
+        : `No PPT key set — TCGPlayer prices only (free, unlimited).`;
+    const timeEst = Math.ceil(candidates.length * REFRESH_THROTTLE_MS / 1000);
+    const msg = `Refresh ${candidates.length} card${candidates.length === 1 ? '' : 's'}?
+
+${creditWarn}
+
+Estimated time: ~${timeEst}s`;
+    if (candidates.length > 5 && !confirm(msg)) return;
   }
 
   refreshState.running = true;
@@ -6276,7 +6342,9 @@ const filterState = {
   location: '',
   search: '',     // bound to the header search input
   sortBy: 'updated_at',
-  sortDir: 'desc'
+  sortDir: 'desc',
+  minPrice: null, // filter: only cards with market price >= this value
+  topN: null      // filter: only show top N most valuable cards
 };
 
 // Helpers --------------------------------------------------------
@@ -6351,13 +6419,26 @@ function applyFilters(cards) {
       const hay = ((c.name || '') + ' ' + (c.set || '') + ' ' + (c.number || '')).toLowerCase();
       if (!hay.includes(q)) return false;
     }
+    if (filterState.minPrice != null) {
+      if (c.last_market_price == null || c.last_market_price < filterState.minPrice) return false;
+    }
     return true;
   });
 }
 
 function sortCards(cards) {
-  const { sortBy, sortDir } = filterState;
+  const { sortBy, sortDir, topN } = filterState;
   const dir = (sortDir === 'asc') ? 1 : -1;
+  // For topN, always sort by value descending first, then cap
+  if (topN) {
+    return cards.slice()
+      .sort((a, b) => {
+        const av = getCardMetrics(a).value ?? -Infinity;
+        const bv = getCardMetrics(b).value ?? -Infinity;
+        return bv - av;
+      })
+      .slice(0, topN);
+  }
   return cards.slice().sort((a, b) => {
     const ma = getCardMetrics(a), mb = getCardMetrics(b);
     let av, bv;
@@ -6674,6 +6755,50 @@ function setupFilterBar() {
     filterState.sortDir = dir;
     render();
   });
+  // Price threshold filter
+  const mp = document.getElementById('f-min-price');
+  mp.addEventListener('input', () => {
+    const v = parseFloat(mp.value);
+    filterState.minPrice = mp.value === '' || isNaN(v) ? null : v;
+    render();
+  });
+
+  // Top 20 quick filter — toggles on/off
+  const top20Btn = document.getElementById('f-top20-btn');
+  top20Btn.addEventListener('click', () => {
+    if (filterState.topN) {
+      filterState.topN = null;
+      top20Btn.style.background = 'var(--card)';
+      top20Btn.style.color = 'var(--text)';
+      top20Btn.style.borderColor = 'var(--border)';
+    } else {
+      filterState.topN = 20;
+      top20Btn.style.background = 'var(--accent)';
+      top20Btn.style.color = 'white';
+      top20Btn.style.borderColor = 'var(--accent)';
+    }
+    render();
+  });
+
+  // Listed on TCGPlayer quick filter — toggles on/off
+  const listedBtn = document.getElementById('f-listed-btn');
+  listedBtn.addEventListener('click', () => {
+    if (filterState.location === 'listed') {
+      filterState.location = '';
+      lc.value = '';
+      listedBtn.style.background = 'var(--card)';
+      listedBtn.style.color = 'var(--text)';
+      listedBtn.style.borderColor = 'var(--border)';
+    } else {
+      filterState.location = 'listed';
+      lc.value = 'listed';
+      listedBtn.style.background = 'var(--accent)';
+      listedBtn.style.color = 'white';
+      listedBtn.style.borderColor = 'var(--accent)';
+    }
+    render();
+  });
+
   document.getElementById('f-clear').addEventListener('click', () => {
     filterState.category = 'Pokemon';
     filterState.set = '';
@@ -6681,12 +6806,22 @@ function setupFilterBar() {
     filterState.tag = '';
     filterState.location = '';
     filterState.search = '';
+    filterState.minPrice = null;
+    filterState.topN = null;
     cs.value = 'Pokemon';
     ss.value = '';
     cd.value = '';
     tg.value = '';
     lc.value = '';
+    mp.value = '';
     document.getElementById('global-search').value = '';
+    // Reset quick filter button styles
+    top20Btn.style.background = 'var(--card)';
+    top20Btn.style.color = 'var(--text)';
+    top20Btn.style.borderColor = 'var(--border)';
+    listedBtn.style.background = 'var(--card)';
+    listedBtn.style.color = 'var(--text)';
+    listedBtn.style.borderColor = 'var(--border)';
     render();
   });
   // Click sortable header
