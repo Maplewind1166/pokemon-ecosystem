@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PkVault">
+<meta name="theme-color" content="#0a0a0f">
+<title>Pokemon Vault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:        #0a0a0f;
+  --surface:   #13131a;
+  --card:      #1c1c26;
+  --border:    #2a2a38;
+  --accent:    #6c63ff;
+  --accent2:   #ff6584;
+  --green:     #22c55e;
+  --red:       #ef4444;
+  --yellow:    #f59e0b;
+  --text:      #f0f0f8;
+  --muted:     #6b6b82;
+  --subtle:    #3a3a50;
+  --font:      'Syne', system-ui, sans-serif;
+  --mono:      'DM Mono', monospace;
+  --safe-top:  env(safe-area-inset-top, 0px);
+  --safe-bot:  env(safe-area-inset-bottom, 0px);
+  --radius:    14px;
+  --shadow:    0 8px 32px rgba(0,0,0,.6);
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── App shell ───────────────────────────────────────────── */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bot);
+}
+
+/* ── Screens ─────────────────────────────────────────────── */
+.screen {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+.screen.active { display: flex; }
+
+/* ── Bottom nav ──────────────────────────────────────────── */
+#bottom-nav {
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: var(--safe-bot);
+}
+.nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 4px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .15s;
+}
+.nav-btn .icon { font-size: 20px; line-height: 1; }
+.nav-btn.active { color: var(--accent); }
+
+/* ── Screen header ───────────────────────────────────────── */
+.screen-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.screen-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.screen-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ── Scroll area ─────────────────────────────────────────── */
+.scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 20px;
+}
+
+/* ── Search bar ──────────────────────────────────────────── */
+.search-wrap {
+  display: flex;
+  gap: 10px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.search-input {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-family: var(--font);
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--muted); }
+.search-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  color: white;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── Card tiles ──────────────────────────────────────────── */
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card-tile {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color .15s, transform .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-tile:active { transform: scale(.98); }
+.card-tile:hover { border-color: var(--accent); }
+.card-tile img {
+  width: 56px;
+  height: 78px;
+  object-fit: contain;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.card-tile-info { flex: 1; min-width: 0; }
+.card-tile-name {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-tile-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-tile-price {
+  font-size: 18px;
+  font-weight: 800;
+  font-family: var(--mono);
+  color: var(--green);
+  margin-top: 6px;
+}
+.card-tile-price.no-price { color: var(--muted); font-size: 13px; font-weight: 400; }
+.card-tile-rarity {
+  font-size: 10px;
+  background: var(--subtle);
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* ── Status messages ─────────────────────────────────────── */
+.status-msg {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.status-msg .big { font-size: 40px; display: block; margin-bottom: 12px; }
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  margin: 40px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Detail panel (slide-up sheet) ──────────────────────── */
+#detail-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+}
+#detail-sheet.open { display: flex; flex-direction: column; }
+#detail-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.7);
+  backdrop-filter: blur(4px);
+}
+#detail-content {
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  padding-bottom: calc(24px + var(--safe-bot));
+  max-height: 92vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  animation: slideUp .25s cubic-bezier(.32,0,.15,1);
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.sheet-handle {
+  width: 40px; height: 4px;
+  background: var(--subtle);
+  border-radius: 2px;
+  margin: 12px auto 0;
+}
+.sheet-card-image {
+  width: 120px;
+  margin: 20px auto 0;
+  display: block;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.sheet-name {
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  padding: 12px 20px 0;
+  letter-spacing: -.02em;
+}
+.sheet-meta {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px 20px 0;
+}
+
+/* ── Price grid ──────────────────────────────────────────── */
+.price-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 16px 20px 0;
+}
+.price-cell {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.price-cell-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.price-cell-value {
+  font-size: 22px;
+  font-weight: 800;
+  font-family: var(--mono);
+  margin-top: 4px;
+}
+.price-cell-value.green { color: var(--green); }
+.price-cell-value.muted { color: var(--muted); font-size: 14px; font-weight: 400; }
+
+/* ── Fair price checker ──────────────────────────────────── */
+.fair-price-section {
+  margin: 16px 20px 0;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.fair-price-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.fair-price-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fair-price-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.fair-price-input-wrap span { color: var(--muted); font-size: 14px; }
+.fair-price-input {
+  flex: 1;
+  background: none;
+  border: none;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text);
+  outline: none;
+  width: 100%;
+}
+.fair-price-verdict {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  display: none;
+}
+.fair-price-verdict.good  { background: rgba(34,197,94,.15);  color: var(--green); }
+.fair-price-verdict.fair  { background: rgba(245,158,11,.15); color: var(--yellow); }
+.fair-price-verdict.high  { background: rgba(239,68,68,.15);  color: var(--red); }
+
+/* ── PSA quick estimate ──────────────────────────────────── */
+.psa-section {
+  margin: 12px 20px 0;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.psa-section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.psa-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.psa-slider {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.psa-pct {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 44px;
+  text-align: right;
+}
+.psa-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.psa-verdict {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: 10px;
+  text-align: center;
+  display: none;
+}
+
+/* ── Sheet action buttons ────────────────────────────────── */
+.sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px 0;
+}
+.sheet-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.sheet-btn:active { opacity: .8; }
+.sheet-btn.primary { background: var(--accent); color: white; }
+.sheet-btn.secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+.sheet-btn.danger { background: rgba(239,68,68,.15); color: var(--red); }
+
+/* ── Vault screen ────────────────────────────────────────── */
+.vault-header-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  font-family: var(--mono);
+  margin-top: 4px;
+}
+.stat-value.green { color: var(--green); }
+.stat-value.red   { color: var(--red); }
+
+.vault-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.vault-filter-row::-webkit-scrollbar { display: none; }
+.filter-chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.vault-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color .15s;
+  border: 1px solid var(--border);
+}
+.vault-card-row:active { opacity: .8; }
+.vault-card-row img {
+  width: 44px;
+  height: 61px;
+  object-fit: contain;
+  border-radius: 5px;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.vault-card-row-info { flex: 1; min-width: 0; }
+.vault-card-row-name {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vault-card-row-meta {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vault-card-row-price {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+/* ── Settings screen ─────────────────────────────────────── */
+.settings-section {
+  background: var(--card);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.settings-section-title {
+  padding: 14px 16px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+.settings-row {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.settings-row .hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.settings-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+}
+.settings-input:focus { border-color: var(--accent); }
+.settings-save-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.drive-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+.drive-status-pill.connected { background: rgba(34,197,94,.15); color: var(--green); }
+.drive-status-pill.disconnected { background: var(--surface); color: var(--muted); }
+
+/* ── Toast ───────────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: calc(80px + var(--safe-bot));
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--text);
+  color: var(--bg);
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 200;
+}
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── Own badge ───────────────────────────────────────────── */
+.own-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(108,99,255,.2);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin: 8px 20px 0;
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Search Screen ───────────────────────────────────── -->
+  <div class="screen active" id="screen-search">
+    <div class="screen-header">
+      <div class="screen-title">Price Check</div>
+      <div class="screen-sub">Search any Pokemon card</div>
+    </div>
+    <div class="search-wrap">
+      <input class="search-input" id="search-input" type="search"
+        placeholder="Card name, e.g. Charizard ex"
+        autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="search-btn" id="search-btn">Go</button>
+    </div>
+    <div class="scroll-area" id="search-results-area">
+      <div class="status-msg">
+        <span class="big">🔍</span>
+        Search for any card to see<br>live market prices
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Vault Screen ────────────────────────────────────── -->
+  <div class="screen" id="screen-vault">
+    <div class="screen-header">
+      <div class="screen-title">My Vault</div>
+      <div class="screen-sub" id="vault-sub">Loading…</div>
+    </div>
+    <div class="scroll-area" id="vault-area">
+      <div class="vault-header-stats" id="vault-stats" style="display:none;">
+        <div class="stat-card">
+          <div class="stat-label">Total Value</div>
+          <div class="stat-value green" id="stat-value">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Cards</div>
+          <div class="stat-value" id="stat-cards">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Cost Basis</div>
+          <div class="stat-value" id="stat-cost">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">P/L</div>
+          <div class="stat-value" id="stat-pl">—</div>
+        </div>
+      </div>
+      <div class="vault-filter-row" id="vault-filters" style="display:none;">
+        <button class="filter-chip active" data-filter="all">All</button>
+        <button class="filter-chip" data-filter="listed">🏷 Listed</button>
+        <button class="filter-chip" data-filter="high">$50+</button>
+        <button class="filter-chip" data-filter="top20">Top 20</button>
+      </div>
+      <div id="vault-list">
+        <div class="status-msg">
+          <span class="big">🗄</span>
+          Connect Google Drive in Settings<br>to sync your vault
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Settings Screen ────────────────────────────────── -->
+  <div class="screen" id="screen-settings">
+    <div class="screen-header">
+      <div class="screen-title">Settings</div>
+    </div>
+    <div class="scroll-area">
+      <div class="settings-section">
+        <div class="settings-section-title">Price API</div>
+        <div class="settings-row">
+          <label>PokemonPriceTracker API Key</label>
+          <div class="hint">Free key from pokemonpricetracker.com · 100 credits/day</div>
+          <input class="settings-input" id="s-ppt-key" type="password"
+            placeholder="pokeprice_free_…" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Google Drive Sync</div>
+        <div class="settings-row">
+          <label>OAuth Client ID</label>
+          <div class="hint">From Google Cloud Console → Credentials → Pokemon Vault</div>
+          <input class="settings-input" id="s-drive-id" type="text"
+            placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off">
+          <div id="s-drive-status-pill" class="drive-status-pill disconnected">
+            ● Not connected
+          </div>
+        </div>
+        <div class="settings-row">
+          <button class="settings-save-btn" id="s-drive-connect-btn">🔗 Connect Google Drive</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">PSA Defaults</div>
+        <div class="settings-row">
+          <label>PSA Fee per card ($)</label>
+          <input class="settings-input" id="s-psa-fee" type="number" value="25" step="0.01">
+        </div>
+        <div class="settings-row">
+          <label>TCGPlayer fee rate (%)</label>
+          <input class="settings-input" id="s-tcg-fee" type="number" value="12.5" step="0.1">
+        </div>
+        <div class="settings-row">
+          <label>Shipping to PSA ($)</label>
+          <input class="settings-input" id="s-ship-out" type="number" value="3" step="0.01">
+        </div>
+        <div class="settings-row">
+          <label>Return ship from PSA ($)</label>
+          <input class="settings-input" id="s-ship-in" type="number" value="3" step="0.01">
+        </div>
+        <div class="settings-row">
+          <label>Turnaround (months)</label>
+          <input class="settings-input" id="s-months" type="number" value="3" step="0.5">
+        </div>
+      </div>
+
+      <button class="settings-save-btn" id="s-save-btn" style="margin-bottom:16px;">
+        💾 Save Settings
+      </button>
+
+      <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:24px;">
+        Pokemon Vault · Mobile PWA<br>
+        Open vault.html on desktop for full features
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Bottom Navigation ──────────────────────────────── -->
+  <nav id="bottom-nav">
+    <button class="nav-btn active" data-screen="search">
+      <span class="icon">🔍</span>Price Check
+    </button>
+    <button class="nav-btn" data-screen="vault">
+      <span class="icon">🗄</span>My Vault
+    </button>
+    <button class="nav-btn" data-screen="settings">
+      <span class="icon">⚙️</span>Settings
+    </button>
+  </nav>
+</div>
+
+<!-- ── Card Detail Sheet ───────────────────────────────────── -->
+<div id="detail-sheet">
+  <div id="detail-backdrop"></div>
+  <div id="detail-content">
+    <div class="sheet-handle"></div>
+    <img class="sheet-card-image" id="d-image" src="" alt="">
+    <div class="sheet-name" id="d-name"></div>
+    <div class="sheet-meta" id="d-meta"></div>
+    <div id="d-own-badge" class="own-badge" style="display:none;">✓ In your vault</div>
+
+    <div class="price-grid">
+      <div class="price-cell">
+        <div class="price-cell-label">Market Price</div>
+        <div class="price-cell-value green" id="d-market">—</div>
+      </div>
+      <div class="price-cell">
+        <div class="price-cell-label">Low Price</div>
+        <div class="price-cell-value" id="d-low">—</div>
+      </div>
+      <div class="price-cell">
+        <div class="price-cell-label">Sellers</div>
+        <div class="price-cell-value" id="d-sellers">—</div>
+      </div>
+      <div class="price-cell">
+        <div class="price-cell-label">Last Updated</div>
+        <div class="price-cell-value muted" id="d-updated">—</div>
+      </div>
+    </div>
+
+    <!-- Fair price checker -->
+    <div class="fair-price-section">
+      <div class="fair-price-label">Is the asking price fair?</div>
+      <div class="fair-price-row">
+        <div class="fair-price-input-wrap">
+          <span>$</span>
+          <input class="fair-price-input" id="d-asking" type="number"
+            step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="fair-price-verdict" id="d-fair-verdict"></div>
+    </div>
+
+    <!-- PSA quick estimate -->
+    <div class="psa-section" id="d-psa-section" style="display:none;">
+      <div class="psa-section-label">PSA Grade Estimate</div>
+      <div class="psa-slider-row">
+        <input class="psa-slider" type="range" id="d-psa-slider" min="0" max="100" value="20">
+        <div class="psa-pct" id="d-psa-pct">20%</div>
+      </div>
+      <div class="psa-hint">Your estimate of getting PSA 10. Sharp pulls: 20–35%.</div>
+      <div class="psa-verdict" id="d-psa-verdict"></div>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="sheet-btn secondary" id="d-tcgplayer-btn">🛒 View on TCGPlayer</button>
+      <button class="sheet-btn secondary" id="d-ebay-btn">📦 eBay Sold Listings</button>
+      <button class="sheet-btn secondary" id="d-josheebee-btn">📐 Check Centering (JoshBeeTCG)</button>
+      <div style="height:4px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ──────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────
+const PPT_BASE   = 'https://www.pokemonpricetracker.com/api/v2';
+const TCG_BASE   = 'https://api.pokemontcg.io/v2';
+const CORS_PROXY = 'https://corsproxy.io/?';
+const STORE_KEY  = 'pvault_mobile_settings';
+const VAULT_KEY  = 'pvault_mobile_vault'; // cached vault data from Drive
+
+// ── Settings ───────────────────────────────────────────────
+let settings = {
+  ppt_key: '', drive_client_id: '', drive_connected: false,
+  psa_fee: 25, tcg_fee_pct: 12.5, ship_out: 3, ship_in: 3, psa_months: 3
+};
+let vaultCards = []; // cached from Drive
+let driveToken = null;
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    settings = { ...settings, ...s };
+  } catch(e) {}
+}
+function saveSettings() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(settings));
+}
+function loadVaultCache() {
+  try {
+    const v = JSON.parse(localStorage.getItem(VAULT_KEY) || '[]');
+    vaultCards = Array.isArray(v) ? v : [];
+  } catch(e) { vaultCards = []; }
+}
+function saveVaultCache(cards) {
+  vaultCards = cards;
+  localStorage.setItem(VAULT_KEY, JSON.stringify(cards));
+}
+
+// ── Toast ──────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ── Navigation ─────────────────────────────────────────────
+let currentScreen = 'search';
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  document.querySelector(`[data-screen="${id}"]`).classList.add('active');
+  currentScreen = id;
+  if (id === 'vault') renderVault();
+  if (id === 'settings') populateSettings();
+}
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => showScreen(btn.dataset.screen));
+});
+
+// ── PPT fetch via CORS proxy ───────────────────────────────
+async function pptFetch(endpoint) {
+  const url = PPT_BASE + endpoint;
+  const proxied = CORS_PROXY + encodeURIComponent(url);
+  const headers = settings.ppt_key
+    ? { Authorization: `Bearer ${settings.ppt_key}` }
+    : {};
+  return fetch(proxied, { headers });
+}
+
+// ── Normalize PPT response ─────────────────────────────────
+function normalizePpt(c) {
+  const setName = c.setName ?? c.set?.name ?? '';
+  const number  = c.cardNumber ?? c.number ?? '';
+  const image   = c.imageCdnUrl200 ?? c.imageCdnUrl400 ?? c.imageUrl ?? '';
+  const prices  = c.prices || {};
+  const market  = prices.market ?? prices.marketPrice ?? null;
+  const low     = prices.low ?? null;
+  const sellers = prices.sellers ?? null;
+  const updated = prices.lastUpdated ?? null;
+  return {
+    id: c.id ?? c.tcgPlayerId ?? (c.name + '-' + number),
+    name: c.name || '', set: setName, number, rarity: c.rarity || '',
+    image, imageLarge: c.imageCdnUrl800 ?? image,
+    market: typeof market === 'number' ? market : null,
+    low: typeof low === 'number' ? low : null,
+    sellers, updated,
+    tcgUrl: c.tcgPlayerUrl || '',
+    tcgPlayerId: c.tcgPlayerId ?? null,
+    source: 'ppt', raw: c
+  };
+}
+
+// ── Search ─────────────────────────────────────────────────
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  const area = document.getElementById('search-results-area');
+  area.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    // Try PPT first (has prices), fall back to Pokemon TCG API
+    let results = [];
+    if (settings.ppt_key) {
+      const r = await pptFetch(`/cards?search=${encodeURIComponent(q)}&limit=20`);
+      if (r.ok) {
+        const body = await r.json();
+        const list = Array.isArray(body) ? body : (body.data || []);
+        results = list.map(normalizePpt);
+      }
+    }
+    // Also search TCG API and merge (for cards PPT missed)
+    try {
+      const tr = await fetch(`${TCG_BASE}/cards?q=name:"${encodeURIComponent(q)}"&pageSize=12&orderBy=-set.releaseDate`);
+      if (tr.ok) {
+        const tbody = await tr.json();
+        const tcgCards = (tbody.data || []).map(c => {
+          const prices = c.tcgplayer?.prices || {};
+          let market = null;
+          for (const v of Object.values(prices)) {
+            if (v?.market) { market = v.market; break; }
+          }
+          return {
+            id: c.id, name: c.name,
+            set: c.set?.name || '', number: c.number || '',
+            rarity: c.rarity || '',
+            image: c.images?.small || '', imageLarge: c.images?.large || '',
+            market, low: null, sellers: null, updated: null,
+            tcgUrl: c.tcgplayer?.url || '',
+            tcgPlayerId: null, source: 'tcg', raw: c
+          };
+        });
+        // Merge: add TCG cards not already in results
+        const seen = new Set(results.map(r => r.tcgPlayerId ? 'id:' + r.tcgPlayerId : (r.name + '|' + r.number).toLowerCase()));
+        tcgCards.forEach(c => {
+          const k = (c.name + '|' + c.number).toLowerCase();
+          if (!seen.has(k)) { seen.add(k); results.push(c); }
+        });
+      }
+    } catch(e) {}
+
+    if (!results.length) {
+      area.innerHTML = '<div class="status-msg"><span class="big">😕</span>No cards found.<br>Try a different name.</div>';
+      return;
+    }
+    renderSearchResults(results, area);
+  } catch(e) {
+    area.innerHTML = `<div class="status-msg">Error: ${e.message}</div>`;
+  }
+}
+
+function renderSearchResults(cards, area) {
+  area.innerHTML = '';
+  const list = document.createElement('div');
+  list.className = 'results-list';
+
+  // Check which cards are in vault
+  const vaultNames = new Set(vaultCards.map(c => (c.name + '|' + c.number).toLowerCase()));
+
+  cards.forEach(card => {
+    const tile = document.createElement('div');
+    tile.className = 'card-tile';
+    const inVault = vaultNames.has((card.name + '|' + card.number).toLowerCase());
+    tile.innerHTML = `
+      <img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.style.opacity='.2'">
+      <div class="card-tile-info">
+        <div class="card-tile-name">${card.name}${inVault ? ' <span style="color:var(--accent);font-size:11px;">✓ owned</span>' : ''}</div>
+        <div class="card-tile-meta">${card.set || '?'} · #${card.number || '?'}</div>
+        ${card.rarity ? `<div class="card-tile-rarity">${card.rarity}</div>` : ''}
+        <div class="card-tile-price ${card.market ? '' : 'no-price'}">
+          ${card.market ? '$' + card.market.toFixed(2) : 'Price unavailable'}
+        </div>
+      </div>
+    `;
+    tile.addEventListener('click', () => openDetail(card, inVault));
+    list.appendChild(tile);
+  });
+  area.appendChild(list);
+}
+
+// ── Detail Sheet ───────────────────────────────────────────
+let currentDetailCard = null;
+
+function openDetail(card, inVault) {
+  currentDetailCard = card;
+  document.getElementById('d-image').src = card.imageLarge || card.image || '';
+  document.getElementById('d-name').textContent = card.name;
+  document.getElementById('d-meta').textContent =
+    (card.set || '—') + ' · #' + (card.number || '?') + (card.rarity ? ' · ' + card.rarity : '');
+
+  // Own badge
+  const badge = document.getElementById('d-own-badge');
+  badge.style.display = inVault ? 'inline-flex' : 'none';
+
+  // Prices
+  const fmt = v => v != null ? '$' + v.toFixed(2) : '—';
+  document.getElementById('d-market').textContent = fmt(card.market);
+  document.getElementById('d-low').textContent = fmt(card.low);
+  document.getElementById('d-sellers').textContent = card.sellers != null ? card.sellers : '—';
+  const upd = card.updated ? new Date(card.updated).toLocaleDateString() : '—';
+  document.getElementById('d-updated').textContent = upd;
+
+  // Links
+  const tcgQ = encodeURIComponent(card.name + ' ' + (card.set || '') + ' ' + (card.number || ''));
+  document.getElementById('d-tcgplayer-btn').onclick = () =>
+    window.open(card.tcgUrl || `https://www.tcgplayer.com/search/pokemon/product?q=${tcgQ}`, '_blank');
+  document.getElementById('d-ebay-btn').onclick = () =>
+    window.open(`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(card.name + ' ' + (card.set||'') + ' ' + (card.number||'') + ' pokemon')}&LH_Sold=1&LH_Complete=1`, '_blank');
+  document.getElementById('d-josheebee-btn').onclick = () =>
+    window.open('https://josheebeetcg.com/centering-grading-tool/', '_blank');
+
+  // Reset fair price checker
+  document.getElementById('d-asking').value = '';
+  document.getElementById('d-fair-verdict').style.display = 'none';
+
+  // PSA section — only show if we have a market price
+  const psaSection = document.getElementById('d-psa-section');
+  if (card.market) {
+    psaSection.style.display = '';
+    document.getElementById('d-psa-slider').value = 20;
+    document.getElementById('d-psa-pct').textContent = '20%';
+    document.getElementById('d-psa-verdict').style.display = 'none';
+    updatePsaVerdict(card.market);
+  } else {
+    psaSection.style.display = 'none';
+  }
+
+  document.getElementById('detail-sheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDetail() {
+  document.getElementById('detail-sheet').classList.remove('open');
+  document.body.style.overflow = '';
+  currentDetailCard = null;
+}
+
+document.getElementById('detail-backdrop').addEventListener('click', closeDetail);
+
+// Fair price checker
+document.getElementById('d-asking').addEventListener('input', () => {
+  const asking = parseFloat(document.getElementById('d-asking').value);
+  const market = currentDetailCard?.market;
+  const verdict = document.getElementById('d-fair-verdict');
+  if (!asking || !market) { verdict.style.display = 'none'; return; }
+  const pct = (asking / market - 1) * 100;
+  verdict.style.display = '';
+  verdict.className = 'fair-price-verdict';
+  if (pct <= -10) {
+    verdict.classList.add('good');
+    verdict.textContent = `✓ Great deal — ${Math.abs(pct).toFixed(0)}% below market ($${market.toFixed(2)})`;
+  } else if (pct <= 10) {
+    verdict.classList.add('fair');
+    verdict.textContent = `≈ Fair price — within 10% of market ($${market.toFixed(2)})`;
+  } else {
+    verdict.classList.add('high');
+    verdict.textContent = `✗ Overpriced — ${pct.toFixed(0)}% above market ($${market.toFixed(2)})`;
+  }
+});
+
+// PSA slider
+document.getElementById('d-psa-slider').addEventListener('input', function() {
+  document.getElementById('d-psa-pct').textContent = this.value + '%';
+  if (currentDetailCard?.market) updatePsaVerdict(currentDetailCard.market);
+});
+
+function updatePsaVerdict(rawMarket) {
+  const p10pct = Number(document.getElementById('d-psa-slider').value);
+  const s = settings;
+  const feeRate = s.tcg_fee_pct / 100;
+  const p10 = p10pct / 100;
+  const p9  = (1 - p10) * 0.45;
+  const pLow = (1 - p10) * 0.55;
+  // Rough PSA price estimates (2x / 1.3x / 0.9x raw if no data)
+  const est10  = rawMarket * 2.5;
+  const est9   = rawMarket * 1.3;
+  const estLow = rawMarket * 0.9;
+  const gradingCost = s.psa_fee + s.ship_out + s.ship_in;
+  const netRaw = rawMarket * (1 - feeRate) - 0.30;
+  const net10  = est10  * (1 - feeRate) - 0.30;
+  const net9   = est9   * (1 - feeRate) - 0.30;
+  const netLow = estLow * (1 - feeRate) - 0.30;
+  const evGraded = p10 * net10 + p9 * net9 + pLow * netLow - gradingCost;
+  const evGain = evGraded - netRaw;
+  const verdict = document.getElementById('d-psa-verdict');
+  verdict.style.display = '';
+  verdict.className = 'psa-verdict';
+  let tier, bg, color;
+  if (evGain >= 15) {
+    tier = '📈 GRADE IT'; bg = 'rgba(34,197,94,.15)'; color = 'var(--green)';
+  } else if (evGain >= 5) {
+    tier = '📊 WEAK GRADE'; bg = 'rgba(34,197,94,.1)'; color = 'var(--green)';
+  } else if (evGain >= -5) {
+    tier = '⚖️ TOSS-UP'; bg = 'rgba(245,158,11,.15)'; color = 'var(--yellow)';
+  } else if (evGain >= -15) {
+    tier = '📉 WEAK SELL'; bg = 'rgba(239,68,68,.1)'; color = 'var(--red)';
+  } else {
+    tier = '🚫 SELL RAW'; bg = 'rgba(239,68,68,.15)'; color = 'var(--red)';
+  }
+  verdict.style.background = bg;
+  verdict.style.color = color;
+  verdict.textContent = `${tier} · EV gain: ${evGain >= 0 ? '+' : ''}$${evGain.toFixed(0)} (estimates only — enter PSA prices on desktop for accuracy)`;
+}
+
+// ── Vault screen ───────────────────────────────────────────
+let vaultFilter = 'all';
+
+function renderVault() {
+  const list = document.getElementById('vault-list');
+  const stats = document.getElementById('vault-stats');
+  const filters = document.getElementById('vault-filters');
+  const sub = document.getElementById('vault-sub');
+
+  if (!vaultCards.length) {
+    list.innerHTML = '<div class="status-msg"><span class="big">🗄</span>No vault data.<br>Connect Google Drive in Settings.</div>';
+    stats.style.display = 'none'; filters.style.display = 'none';
+    sub.textContent = 'Not synced';
+    return;
+  }
+
+  // Stats
+  let totalValue = 0, totalCost = 0, priced = 0;
+  vaultCards.forEach(c => {
+    if (c.last_market_price) { totalValue += c.last_market_price * (c.quantity || 1); priced++; }
+    if (c.cost_basis) totalCost += c.cost_basis * (c.quantity || 1);
+  });
+  const pl = totalValue - totalCost;
+  document.getElementById('stat-value').textContent = '$' + totalValue.toFixed(0);
+  document.getElementById('stat-cards').textContent = vaultCards.length;
+  document.getElementById('stat-cost').textContent = totalCost ? '$' + totalCost.toFixed(0) : '—';
+  const plEl = document.getElementById('stat-pl');
+  plEl.textContent = totalCost ? (pl >= 0 ? '+' : '') + '$' + pl.toFixed(0) : '—';
+  plEl.className = 'stat-value ' + (pl >= 0 ? 'green' : 'red');
+  stats.style.display = '';
+  filters.style.display = '';
+  sub.textContent = `${vaultCards.length} cards · $${totalValue.toFixed(0)} total value`;
+
+  // Filter
+  let cards = [...vaultCards];
+  if (vaultFilter === 'listed') cards = cards.filter(c => c.listed_on_tcgplayer);
+  else if (vaultFilter === 'high') cards = cards.filter(c => c.last_market_price >= 50);
+  else if (vaultFilter === 'top20') {
+    cards.sort((a, b) => (b.last_market_price || 0) - (a.last_market_price || 0));
+    cards = cards.slice(0, 20);
+  }
+  // Sort by value desc by default
+  if (vaultFilter !== 'top20') {
+    cards.sort((a, b) => (b.last_market_price || 0) - (a.last_market_price || 0));
+  }
+
+  if (!cards.length) {
+    list.innerHTML = '<div class="status-msg">No cards match this filter.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  cards.forEach(card => {
+    const row = document.createElement('div');
+    row.className = 'vault-card-row';
+    const price = card.last_market_price;
+    row.innerHTML = `
+      <img src="${card.image_url || ''}" alt="${card.name}" loading="lazy" onerror="this.style.opacity='.15'">
+      <div class="vault-card-row-info">
+        <div class="vault-card-row-name">${card.name}${card.listed_on_tcgplayer ? ' <span style="font-size:10px;">🏷</span>' : ''}</div>
+        <div class="vault-card-row-meta">${card.set || '?'} · #${card.number || '?'} · ${card.condition || '?'}</div>
+        ${card.cost_basis ? `<div class="vault-card-row-meta" style="color:var(--muted);">Cost: $${card.cost_basis.toFixed(2)}</div>` : ''}
+      </div>
+      <div class="vault-card-row-price">${price ? '$' + price.toFixed(2) : '—'}</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    vaultFilter = chip.dataset.filter;
+    renderVault();
+  });
+});
+
+// ── Settings screen ────────────────────────────────────────
+function populateSettings() {
+  document.getElementById('s-ppt-key').value = settings.ppt_key || '';
+  document.getElementById('s-drive-id').value = settings.drive_client_id || '';
+  document.getElementById('s-psa-fee').value = settings.psa_fee;
+  document.getElementById('s-tcg-fee').value = settings.tcg_fee_pct;
+  document.getElementById('s-ship-out').value = settings.ship_out;
+  document.getElementById('s-ship-in').value = settings.ship_in;
+  document.getElementById('s-months').value = settings.psa_months;
+  updateDriveStatusPill();
+}
+
+function updateDriveStatusPill() {
+  const pill = document.getElementById('s-drive-status-pill');
+  if (driveToken) {
+    pill.className = 'drive-status-pill connected';
+    pill.textContent = '● Connected';
+  } else {
+    pill.className = 'drive-status-pill disconnected';
+    pill.textContent = '● Not connected';
+  }
+}
+
+document.getElementById('s-save-btn').addEventListener('click', () => {
+  settings.ppt_key        = document.getElementById('s-ppt-key').value.trim();
+  settings.drive_client_id = document.getElementById('s-drive-id').value.trim();
+  settings.psa_fee        = parseFloat(document.getElementById('s-psa-fee').value) || 25;
+  settings.tcg_fee_pct    = parseFloat(document.getElementById('s-tcg-fee').value) || 12.5;
+  settings.ship_out       = parseFloat(document.getElementById('s-ship-out').value) || 3;
+  settings.ship_in        = parseFloat(document.getElementById('s-ship-in').value) || 3;
+  settings.psa_months     = parseFloat(document.getElementById('s-months').value) || 3;
+  saveSettings();
+  toast('Settings saved');
+});
+
+// ── Google Drive (reuses same OAuth as desktop) ───────────
+async function driveLoadGIS() {
+  return new Promise((resolve, reject) => {
+    if (window.google?.accounts) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('GIS load failed'));
+    document.head.appendChild(s);
+  });
+}
+
+async function driveConnect() {
+  const clientId = settings.drive_client_id;
+  if (!clientId) { toast('Save your Client ID first'); return; }
+  try {
+    await driveLoadGIS();
+    const tc = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: async (resp) => {
+        if (resp.error) { toast('Auth error: ' + resp.error); return; }
+        driveToken = resp.access_token;
+        settings.drive_connected = true;
+        saveSettings();
+        updateDriveStatusPill();
+        toast('Drive connected — syncing vault…');
+        await driveDownloadVault();
+      }
+    });
+    tc.requestAccessToken({ prompt: 'consent' });
+  } catch(e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+async function driveDownloadVault() {
+  if (!driveToken) return;
+  try {
+    // Find Pokemon Ecosystem folder
+    const q = encodeURIComponent(`name='Pokemon Ecosystem' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+    const fr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`, {
+      headers: { Authorization: `Bearer ${driveToken}` }
+    });
+    const fb = await fr.json();
+    if (!fb.files?.length) { toast('Pokemon Ecosystem folder not found on Drive'); return; }
+    const folderId = fb.files[0].id;
+
+    // Find vault_data.json
+    const fq = encodeURIComponent(`name='vault_data.json' and '${folderId}' in parents and trashed=false`);
+    const vr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${fq}&fields=files(id)`, {
+      headers: { Authorization: `Bearer ${driveToken}` }
+    });
+    const vb = await vr.json();
+    if (!vb.files?.length) { toast('vault_data.json not found'); return; }
+    const fileId = vb.files[0].id;
+
+    // Download
+    const dr = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${driveToken}` }
+    });
+    const data = await dr.json();
+    if (data.cards) {
+      saveVaultCache(data.cards);
+      toast(`Vault synced — ${data.cards.length} cards`);
+      if (currentScreen === 'vault') renderVault();
+    }
+  } catch(e) {
+    toast('Sync error: ' + e.message);
+  }
+}
+
+document.getElementById('s-drive-connect-btn').addEventListener('click', driveConnect);
+
+// ── Search wiring ──────────────────────────────────────────
+document.getElementById('search-btn').addEventListener('click', doSearch);
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+
+// ── Init ───────────────────────────────────────────────────
+loadSettings();
+loadVaultCache();
+</script>
+</body>
+</html>
