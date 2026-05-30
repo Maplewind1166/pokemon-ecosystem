@@ -1649,7 +1649,11 @@
     <button id="btn-add-card" title="Add a card (n)">➕ Add card</button>
     <button id="btn-import" title="Import a Collectr CSV">📥 Import</button>
     <div class="refresh-split" id="refresh-split-wrap" style="position:relative;display:inline-flex;">
-      <button id="btn-refresh-all" title="Refresh stale prices (r)" style="border-radius:6px 0 0 6px;border-right:none;">↻ Refresh stale</button>
+      <div id="drive-status" title="Google Drive sync status" style="display:none;align-items:center;gap:5px;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;" onclick="driveManualSync()">
+      <span id="drive-status-icon">☁</span>
+      <span id="drive-status-text">Drive</span>
+    </div>
+    <button id="btn-refresh-all" title="Refresh stale prices (r)" style="border-radius:6px 0 0 6px;border-right:none;">↻ Refresh stale</button>
       <button id="btn-refresh-menu" title="More refresh options" style="border-radius:0 6px 6px 0;padding:9px 8px;font-size:11px;">▾</button>
       <div id="refresh-dropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);z-index:200;min-width:200px;overflow:hidden;">
         <button id="btn-refresh-stale" style="width:100%;text-align:left;border:none;border-radius:0;padding:10px 14px;font-size:13px;">↻ Refresh stale only</button>
@@ -2247,6 +2251,32 @@
       <div class="field"><label>p(PSA 9 | not 10) %</label><input type="number" id="s-p9-cond" step="1" min="0" max="100"></div>
       <div class="field"><label>Min EV advantage $</label><input type="number" id="s-min-edge" step="0.5" min="0"></div>
       <div class="field"><label>Annual hurdle rate %</label><input type="number" id="s-hurdle" step="0.5" min="0" max="100"></div>
+    </div>
+
+    <div class="settings-group">
+      <h3>Google Drive Sync</h3>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5;">
+        Sync your vault to Google Drive so it's accessible on all your Macs.
+        Requires a free Google Cloud OAuth Client ID.
+      </div>
+      <div class="field wide">
+        <label>OAuth Client ID
+          <span class="help">From Google Cloud Console → APIs & Services → Credentials</span>
+        </label>
+        <input type="text" id="s-drive-client-id" placeholder="paste Client ID here" autocomplete="off" style="font-size:11px;">
+      </div>
+      <div class="field">
+        <label>Auto-sync on save<span class="help">Upload to Drive whenever vault data changes</span></label>
+        <input type="checkbox" id="s-drive-auto-sync" checked>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button type="button" id="s-drive-connect-btn" class="primary">🔗 Connect Google Drive</button>
+        <button type="button" id="s-drive-disconnect-btn" style="display:none;">Disconnect</button>
+      </div>
+      <div id="s-drive-status" style="font-size:12px;margin-top:8px;color:var(--muted);">Not connected</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">
+        Drive file: <code>My Drive/Pokemon Ecosystem/vault_data.json</code>
+      </div>
     </div>
 
     <div class="settings-group">
@@ -2928,6 +2958,11 @@ const DEFAULT_SETTINGS = {
   p9_cond: 60,
   min_edge: 10.00,
   hurdle: 10,
+  // Google Drive sync
+  drive_client_id: '',
+  drive_connected: false,
+  drive_auto_sync: true,
+  drive_last_synced: null,
   // Bookkeeping
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString()
@@ -3066,7 +3101,9 @@ const SETTINGS_FIELD_MAP = {
   's-graded-ship':     { key: 'graded_ship',           type: 'float'  },
   's-p9-cond':         { key: 'p9_cond',               type: 'float'  },
   's-min-edge':        { key: 'min_edge',              type: 'float'  },
-  's-hurdle':          { key: 'hurdle',                type: 'float'  }
+  's-hurdle':          { key: 'hurdle',                type: 'float'  },
+  's-drive-client-id': { key: 'drive_client_id',       type: 'string' },
+  's-drive-auto-sync': { key: 'drive_auto_sync',       type: 'bool'   }
 };
 
 function readField(id, type) {
@@ -3089,6 +3126,22 @@ async function populateSettings() {
   const s = (await getSettings()) || DEFAULT_SETTINGS;
   for (const [id, def] of Object.entries(SETTINGS_FIELD_MAP)) {
     writeField(id, s[def.key], def.type);
+  }
+  // Drive connection status
+  const driveStat = document.getElementById('s-drive-status');
+  if (driveStat) {
+    if (s.drive_connected && driveConnected) {
+      driveStat.textContent = '✓ Connected';
+      driveStat.style.color = '#16a34a';
+      const cb = document.getElementById('s-drive-connect-btn');
+      const db2 = document.getElementById('s-drive-disconnect-btn');
+      if (cb) cb.style.display = 'none';
+      if (db2) db2.style.display = '';
+    } else if (s.drive_client_id) {
+      driveStat.textContent = 'Not connected this session — click Connect to sign in.';
+    } else {
+      driveStat.textContent = 'Not set up — paste your OAuth Client ID above.';
+    }
   }
   // PPT key status
   const status = document.getElementById('s-ppt-status');
@@ -3714,6 +3767,7 @@ async function saveAddCard() {
 
   await db.cards.put(card);
   toast('Card saved', 'success');
+  driveScheduleSync();
   closeAddCard();
   await render();
 }
@@ -6326,6 +6380,7 @@ function setupCardDetailPanel() {
     if (!confirm(`Delete "${card.name}" (${card.condition})?\nThis can't be undone.`)) return;
     await db.cards.delete(cdState.cardId);
     toast('Card deleted', '');
+    driveScheduleSync();
     closeCardDetail();
     await render();
   });
@@ -6910,10 +6965,332 @@ async function init() {
     setTimeout(() => loader.remove(), 220);
   }
 
+  // Init Google Drive sync
+  initDriveSettings();
+  await driveMaybeRestore();
+
   // Fire-and-forget background auto-refresh if enabled in settings
   maybeAutoRefreshOnOpen();
 }
 
+
+
+// ============================================================
+// GOOGLE DRIVE SYNC
+// ============================================================
+
+const DRIVE_FOLDER_NAME = 'Pokemon Ecosystem';
+const DRIVE_FILE_NAME   = 'vault_data.json';
+const DRIVE_SCOPES      = 'https://www.googleapis.com/auth/drive.file';
+
+let driveTokenClient = null;
+let driveAccessToken = null;
+let driveFolderId    = null;
+let driveFileId      = null;
+let driveSyncTimer   = null;
+let driveConnected   = false;
+
+// ── Load Google Identity Services script ──────────────────────────────────
+function driveLoadGIS() {
+  return new Promise((resolve, reject) => {
+    if (window.google && window.google.accounts) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load Google Identity Services'));
+    document.head.appendChild(s);
+  });
+}
+
+// ── Initialize token client ───────────────────────────────────────────────
+async function driveInit(clientId) {
+  await driveLoadGIS();
+  driveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: DRIVE_SCOPES,
+    callback: async (resp) => {
+      if (resp.error) { driveSetStatus('Auth error: ' + resp.error, 'error'); return; }
+      driveAccessToken = resp.access_token;
+      driveConnected = true;
+      await updateSettings({ drive_connected: true });
+      driveSetStatus('✓ Connected', 'ok');
+      driveUpdateHeader('✓ Connected', '#16a34a');
+      document.getElementById('s-drive-connect-btn').style.display = 'none';
+      document.getElementById('s-drive-disconnect-btn').style.display = '';
+      // Immediately attempt sync after connecting
+      await driveSync();
+    }
+  });
+}
+
+// ── Request access token (shows Google popup) ─────────────────────────────
+async function driveConnect() {
+  const s = await getSettings();
+  const clientId = (s.drive_client_id || '').trim();
+  if (!clientId) {
+    driveSetStatus('Paste your OAuth Client ID first, then save settings.', 'error');
+    return;
+  }
+  driveSetStatus('Opening Google sign-in…', 'info');
+  try {
+    await driveInit(clientId);
+    driveTokenClient.requestAccessToken({ prompt: 'consent' });
+  } catch(e) {
+    driveSetStatus('Error: ' + e.message, 'error');
+  }
+}
+
+// ── Disconnect ────────────────────────────────────────────────────────────
+async function driveDisconnect() {
+  if (driveAccessToken) google.accounts.oauth2.revoke(driveAccessToken, () => {});
+  driveAccessToken = null; driveConnected = false; driveFolderId = null; driveFileId = null;
+  await updateSettings({ drive_connected: false });
+  driveSetStatus('Disconnected', 'muted');
+  driveUpdateHeader(null);
+  document.getElementById('s-drive-connect-btn').style.display = '';
+  document.getElementById('s-drive-disconnect-btn').style.display = 'none';
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────
+function driveSetStatus(msg, kind) {
+  const el = document.getElementById('s-drive-status');
+  if (!el) return;
+  const colors = { ok: '#16a34a', error: '#dc2626', info: 'var(--accent)', muted: 'var(--muted)' };
+  el.style.color = colors[kind] || 'var(--muted)';
+  el.textContent = msg;
+}
+
+function driveUpdateHeader(msg, color) {
+  const wrap = document.getElementById('drive-status');
+  const icon = document.getElementById('drive-status-icon');
+  const text = document.getElementById('drive-status-text');
+  if (!wrap) return;
+  if (!msg) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  wrap.style.color = color || 'var(--muted)';
+  wrap.style.borderColor = color || 'var(--border)';
+  icon.textContent = color === '#16a34a' ? '✓' : color === '#dc2626' ? '⚠' : '↑';
+  text.textContent = msg;
+}
+
+// ── Find or create the Pokemon Ecosystem folder ───────────────────────────
+async function driveGetFolderId() {
+  if (driveFolderId) return driveFolderId;
+  // Search for existing folder
+  const q = encodeURIComponent(`name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+    headers: { Authorization: `Bearer ${driveAccessToken}` }
+  });
+  const body = await r.json();
+  if (body.files && body.files.length) { driveFolderId = body.files[0].id; return driveFolderId; }
+  // Create it
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${driveAccessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  const folder = await cr.json();
+  driveFolderId = folder.id;
+  return driveFolderId;
+}
+
+// ── Find vault_data.json file ID ──────────────────────────────────────────
+async function driveGetFileId(folderId) {
+  if (driveFileId) return driveFileId;
+  const q = encodeURIComponent(`name='${DRIVE_FILE_NAME}' and '${folderId}' in parents and trashed=false`);
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)`, {
+    headers: { Authorization: `Bearer ${driveAccessToken}` }
+  });
+  const body = await r.json();
+  if (body.files && body.files.length) { driveFileId = body.files[0].id; return driveFileId; }
+  return null; // file doesn't exist yet
+}
+
+// ── Export full vault from IndexedDB ─────────────────────────────────────
+async function driveExportVault() {
+  const s = await getSettings();
+  const cards    = await db.cards.toArray();
+  const wishlist = await db.wishlist.toArray();
+  const prices   = await db.prices.toArray();
+  return {
+    schema_version: 2,
+    exported_at: new Date().toISOString(),
+    cards, wishlist, prices,
+    settings: { ...s, ppt_api_key: undefined, drive_client_id: undefined } // never export keys
+  };
+}
+
+// ── Import vault data into IndexedDB ─────────────────────────────────────
+async function driveImportVault(data) {
+  if (!data || !data.cards) throw new Error('Invalid vault data format');
+  await db.transaction('rw', db.cards, db.wishlist, db.prices, async () => {
+    if (data.cards)    { await db.cards.clear();    await db.cards.bulkPut(data.cards); }
+    if (data.wishlist) { await db.wishlist.clear(); await db.wishlist.bulkPut(data.wishlist); }
+    if (data.prices)   { await db.prices.clear();   await db.prices.bulkPut(data.prices); }
+  });
+}
+
+// ── Upload vault to Drive ─────────────────────────────────────────────────
+async function driveUpload() {
+  if (!driveAccessToken) return;
+  try {
+    driveUpdateHeader('↑ Syncing…', 'var(--accent)');
+    const folderId = await driveGetFolderId();
+    const fileId   = await driveGetFileId(folderId);
+    const data     = await driveExportVault();
+    const blob     = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const form     = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(
+      fileId
+        ? { name: DRIVE_FILE_NAME }
+        : { name: DRIVE_FILE_NAME, parents: [folderId] }
+    )], { type: 'application/json' }));
+    form.append('file', blob);
+    const url = fileId
+      ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+    const method = fileId ? 'PATCH' : 'POST';
+    const r = await fetch(url, {
+      method,
+      headers: { Authorization: `Bearer ${driveAccessToken}` },
+      body: form
+    });
+    const result = await r.json();
+    if (!r.ok) throw new Error(result.error?.message || 'Upload failed');
+    if (!fileId) driveFileId = result.id;
+    const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    driveUpdateHeader('✓ Synced ' + ts, '#16a34a');
+    await updateSettings({ drive_last_synced: new Date().toISOString() });
+  } catch(e) {
+    driveUpdateHeader('⚠ Sync failed', '#dc2626');
+    console.error('Drive upload error:', e);
+  }
+}
+
+// ── Download vault from Drive ─────────────────────────────────────────────
+async function driveDownload() {
+  if (!driveAccessToken) return null;
+  try {
+    const folderId = await driveGetFolderId();
+    const fileId   = await driveGetFileId(folderId);
+    if (!fileId) return null; // no file on Drive yet
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${driveAccessToken}` }
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) {
+    console.error('Drive download error:', e);
+    return null;
+  }
+}
+
+// ── Sync: check Drive, import if newer, else upload ──────────────────────
+async function driveSync() {
+  if (!driveAccessToken) return;
+  try {
+    driveUpdateHeader('↕ Checking…', 'var(--accent)');
+    const folderId = await driveGetFolderId();
+    const fileId   = await driveGetFileId(folderId);
+
+    if (!fileId) {
+      // No Drive file yet — upload current vault
+      await driveUpload();
+      return;
+    }
+
+    // Get Drive file modification time
+    const metaR = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=modifiedTime`, {
+      headers: { Authorization: `Bearer ${driveAccessToken}` }
+    });
+    const meta = await metaR.json();
+    const driveTs = new Date(meta.modifiedTime).getTime();
+
+    // Get local last sync time
+    const s = await getSettings();
+    const localTs = s.drive_last_synced ? new Date(s.drive_last_synced).getTime() : 0;
+
+    if (driveTs > localTs + 5000) {
+      // Drive is newer — download and import
+      driveUpdateHeader('↓ Downloading…', 'var(--accent)');
+      const data = await driveDownload();
+      if (data) {
+        const localCards = await db.cards.count();
+        const driveCards = (data.cards || []).length;
+        // If Drive has more data, import automatically
+        // If local has more data, ask user
+        if (localCards > driveCards && localCards > 0) {
+          const choice = confirm(
+            `Drive has ${driveCards} cards, local has ${localCards} cards.
+
+` +
+            `Drive version is newer (modified ${new Date(driveTs).toLocaleString()}).
+
+` +
+            `OK = use Drive version (replaces local)
+Cancel = keep local and upload it to Drive`
+          );
+          if (choice) {
+            await driveImportVault(data);
+            toast('Vault updated from Google Drive (' + driveCards + ' cards)');
+            await render();
+          } else {
+            await driveUpload();
+          }
+        } else {
+          await driveImportVault(data);
+          await updateSettings({ drive_last_synced: new Date().toISOString() });
+          const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          driveUpdateHeader('✓ Synced ' + ts, '#16a34a');
+          toast('Vault updated from Google Drive (' + driveCards + ' cards)');
+          await render();
+        }
+      }
+    } else {
+      // Local is current — upload
+      await driveUpload();
+    }
+  } catch(e) {
+    driveUpdateHeader('⚠ Sync failed', '#dc2626');
+    console.error('Drive sync error:', e);
+  }
+}
+
+// ── Manual sync (called from header status button) ────────────────────────
+async function driveManualSync() {
+  if (!driveConnected) {
+    openSettings();
+    return;
+  }
+  await driveSync();
+}
+
+// ── Schedule debounced auto-sync after data changes ───────────────────────
+function driveScheduleSync() {
+  if (!driveConnected) return;
+  clearTimeout(driveSyncTimer);
+  driveSyncTimer = setTimeout(driveUpload, 8000); // 8s debounce
+}
+
+// ── Restore Drive session on vault open (token persists for 1hr) ──────────
+async function driveMaybeRestore() {
+  const s = await getSettings();
+  if (!s.drive_connected || !s.drive_client_id) return;
+  // Token not persisted — user needs to click Connect again
+  // But we update the UI to show "Reconnect" state
+  driveSetStatus('Click "Connect Google Drive" to reconnect for this session.', 'info');
+  document.getElementById('drive-status').style.display = 'flex';
+  driveUpdateHeader('☁ Reconnect', 'var(--muted)');
+}
+
+// ── Init: wire settings panel Drive buttons ───────────────────────────────
+function initDriveSettings() {
+  const connectBtn    = document.getElementById('s-drive-connect-btn');
+  const disconnectBtn = document.getElementById('s-drive-disconnect-btn');
+  if (connectBtn)    connectBtn.addEventListener('click', driveConnect);
+  if (disconnectBtn) disconnectBtn.addEventListener('click', driveDisconnect);
+}
+// ── END GOOGLE DRIVE SYNC ────────────────────────────────────────────────
 
 // ============================================================
 // PSA ADVISOR — integrated from psa_decision_tool.html
