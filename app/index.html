@@ -259,6 +259,8 @@ html, body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   animation: slideUp .25s cubic-bezier(.32,0,.15,1);
+  /* needed for close button positioning */
+  isolation: isolate;
 }
 @keyframes slideUp {
   from { transform: translateY(100%); }
@@ -369,9 +371,9 @@ html, body {
   border-radius: 8px;
   display: none;
 }
-.fair-price-verdict.good  { background: rgba(34,197,94,.15);  color: var(--green); }
-.fair-price-verdict.fair  { background: rgba(245,158,11,.15); color: var(--yellow); }
-.fair-price-verdict.high  { background: rgba(239,68,68,.15);  color: var(--red); }
+.fair-price-verdict.good  { display: block; background: rgba(34,197,94,.15);  color: var(--green); }
+.fair-price-verdict.fair  { display: block; background: rgba(245,158,11,.15); color: var(--yellow); }
+.fair-price-verdict.high  { display: block; background: rgba(239,68,68,.15);  color: var(--red); }
 
 /* ── PSA quick estimate ──────────────────────────────────── */
 .psa-section {
@@ -417,7 +419,6 @@ html, body {
   padding: 10px 14px;
   border-radius: 10px;
   text-align: center;
-  display: none;
 }
 
 /* ── Sheet action buttons ────────────────────────────────── */
@@ -800,6 +801,7 @@ html, body {
   <div id="detail-backdrop"></div>
   <div id="detail-content">
     <div class="sheet-handle"></div>
+    <button id="sheet-close-btn" onclick="closeDetail()" style="position:absolute;top:16px;right:16px;background:var(--subtle);border:none;border-radius:50%;width:32px;height:32px;font-size:16px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;">✕</button>
     <img class="sheet-card-image" id="d-image" src="" alt="">
     <div class="sheet-name" id="d-name"></div>
     <div class="sheet-meta" id="d-meta"></div>
@@ -1101,6 +1103,16 @@ function closeDetail() {
 
 document.getElementById('detail-backdrop').addEventListener('click', closeDetail);
 
+// Swipe down to close sheet
+let touchStartY = 0;
+document.getElementById('detail-content').addEventListener('touchstart', e => {
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+document.getElementById('detail-content').addEventListener('touchend', e => {
+  const diff = e.changedTouches[0].clientY - touchStartY;
+  if (diff > 80) closeDetail(); // swipe down 80px closes
+}, { passive: true });
+
 function updatePsaVerdict(rawMarket) {
   const p10pct = Number(document.getElementById('d-psa-slider').value);
   const s = settings;
@@ -1357,6 +1369,16 @@ document.getElementById('d-asking').addEventListener('input', () => {
 document.getElementById('d-psa-slider').addEventListener('input', function() {
   document.getElementById('d-psa-pct').textContent = this.value + '%';
   if (currentDetailCard?.market) updatePsaVerdict(currentDetailCard.market);
+});
+
+// ── Global error handler — prevents blank page ────────────
+window.addEventListener('error', e => {
+  console.error('App error:', e.message, e.filename, e.lineno);
+  toast('Error: ' + e.message);
+});
+window.addEventListener('unhandledrejection', e => {
+  console.error('Unhandled promise:', e.reason);
+  toast('Error: ' + (e.reason?.message || e.reason));
 });
 
 // ── Init ───────────────────────────────────────────────────
