@@ -2269,8 +2269,13 @@
         <label>Auto-sync on save<span class="help">Upload to Drive whenever vault data changes</span></label>
         <input type="checkbox" id="s-drive-auto-sync" checked>
       </div>
+      <div class="field">
+        <label>Auto-reconnect on open<span class="help">Automatically trigger Drive sign-in when vault opens</span></label>
+        <input type="checkbox" id="s-drive-auto-reconnect">
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
         <button type="button" id="s-drive-connect-btn" class="primary">🔗 Connect Google Drive</button>
+        <button type="button" id="s-drive-push-btn" style="display:none;">⬆ Push to Drive</button>
         <button type="button" id="s-drive-disconnect-btn" style="display:none;">Disconnect</button>
       </div>
       <div id="s-drive-status" style="font-size:12px;margin-top:8px;color:var(--muted);">Not connected</div>
@@ -2962,6 +2967,7 @@ const DEFAULT_SETTINGS = {
   drive_client_id: '',
   drive_connected: false,
   drive_auto_sync: true,
+  drive_auto_reconnect: false,
   drive_last_synced: null,
   // Bookkeeping
   created_at: new Date().toISOString(),
@@ -3103,7 +3109,8 @@ const SETTINGS_FIELD_MAP = {
   's-min-edge':        { key: 'min_edge',              type: 'float'  },
   's-hurdle':          { key: 'hurdle',                type: 'float'  },
   's-drive-client-id': { key: 'drive_client_id',       type: 'string' },
-  's-drive-auto-sync': { key: 'drive_auto_sync',       type: 'bool'   }
+  's-drive-auto-sync':       { key: 'drive_auto_sync',       type: 'bool' },
+  's-drive-auto-reconnect':  { key: 'drive_auto_reconnect', type: 'bool' }
 };
 
 function readField(id, type) {
@@ -7016,6 +7023,7 @@ async function driveInit(clientId) {
       driveSetStatus('✓ Connected', 'ok');
       driveUpdateHeader('✓ Connected', '#16a34a');
       document.getElementById('s-drive-connect-btn').style.display = 'none';
+      document.getElementById('s-drive-push-btn').style.display = '';
       document.getElementById('s-drive-disconnect-btn').style.display = '';
       // Immediately attempt sync after connecting
       await driveSync();
@@ -7048,6 +7056,7 @@ async function driveDisconnect() {
   driveSetStatus('Disconnected', 'muted');
   driveUpdateHeader(null);
   document.getElementById('s-drive-connect-btn').style.display = '';
+  document.getElementById('s-drive-push-btn').style.display = 'none';
   document.getElementById('s-drive-disconnect-btn').style.display = 'none';
 }
 
@@ -7211,43 +7220,56 @@ async function driveSync() {
     const localTs = s.drive_last_synced ? new Date(s.drive_last_synced).getTime() : 0;
 
     if (driveTs > localTs + 5000) {
-      // Drive is newer — download and import
-      driveUpdateHeader('↓ Downloading…', 'var(--accent)');
+      // Drive is newer — ALWAYS ask before importing
+      driveUpdateHeader('↓ Checking Drive…', 'var(--accent)');
       const data = await driveDownload();
       if (data) {
         const localCards = await db.cards.count();
         const driveCards = (data.cards || []).length;
-        // If Drive has more data, import automatically
-        // If local has more data, ask user
-        if (localCards > driveCards && localCards > 0) {
-          const choice = confirm(
-            `Drive has ${driveCards} cards, local has ${localCards} cards.
+        const driveDate = new Date(driveTs).toLocaleString();
+
+        // If local has NO cards, safe to import silently
+        if (localCards === 0) {
+          await driveImportVault(data);
+          await updateSettings({ drive_last_synced: new Date().toISOString() });
+          const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          driveUpdateHeader('✓ Synced ' + ts, '#16a34a');
+          toast('Vault loaded from Google Drive (' + driveCards + ' cards)');
+          await render();
+          return;
+        }
+
+        // Always confirm before overwriting local data
+        const localDate = localTs ? new Date(localTs).toLocaleString() : 'never synced';
+        const choice = confirm(
+          `⚠️ Drive version is newer than local.
 
 ` +
-            `Drive version is newer (modified ${new Date(driveTs).toLocaleString()}).
+          `Drive: ${driveCards} cards (updated ${driveDate})
+` +
+          `Local: ${localCards} cards (last synced ${localDate})
 
 ` +
-            `OK = use Drive version (replaces local)
-Cancel = keep local and upload it to Drive`
-          );
-          if (choice) {
-            await driveImportVault(data);
-            toast('Vault updated from Google Drive (' + driveCards + ' cards)');
-            await render();
-          } else {
-            await driveUpload();
-          }
-        } else {
+          `OK     → use Drive version (replaces local data)
+` +
+          `Cancel → keep local version and upload it to Drive`
+        );
+        if (choice) {
           await driveImportVault(data);
           await updateSettings({ drive_last_synced: new Date().toISOString() });
           const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           driveUpdateHeader('✓ Synced ' + ts, '#16a34a');
           toast('Vault updated from Google Drive (' + driveCards + ' cards)');
           await render();
+        } else {
+          // User chose to keep local — upload it to Drive
+          toast('Uploading local vault to Drive…');
+          await driveUpload();
+          toast('Local vault uploaded to Drive (' + localCards + ' cards)');
         }
       }
     } else {
-      // Local is current — upload
+      // Local is current — upload quietly
       await driveUpload();
     }
   } catch(e) {
@@ -7275,20 +7297,33 @@ function driveScheduleSync() {
 // ── Restore Drive session on vault open (token persists for 1hr) ──────────
 async function driveMaybeRestore() {
   const s = await getSettings();
-  if (!s.drive_connected || !s.drive_client_id) return;
-  // Token not persisted — user needs to click Connect again
-  // But we update the UI to show "Reconnect" state
-  driveSetStatus('Click "Connect Google Drive" to reconnect for this session.', 'info');
+  if (!s.drive_client_id) return;
+  if (!s.drive_connected) return;
+  // Show reconnect indicator in header
   document.getElementById('drive-status').style.display = 'flex';
   driveUpdateHeader('☁ Reconnect', 'var(--muted)');
+  if (s.drive_auto_reconnect) {
+    // Auto-trigger sign-in popup on open
+    driveSetStatus('Auto-reconnecting…', 'info');
+    setTimeout(() => driveConnect(), 800); // slight delay so vault renders first
+  } else {
+    driveSetStatus('Click "Connect Google Drive" to reconnect for this session.', 'info');
+  }
 }
 
 // ── Init: wire settings panel Drive buttons ───────────────────────────────
 function initDriveSettings() {
   const connectBtn    = document.getElementById('s-drive-connect-btn');
   const disconnectBtn = document.getElementById('s-drive-disconnect-btn');
+  const pushBtn       = document.getElementById('s-drive-push-btn');
   if (connectBtn)    connectBtn.addEventListener('click', driveConnect);
   if (disconnectBtn) disconnectBtn.addEventListener('click', driveDisconnect);
+  if (pushBtn) pushBtn.addEventListener('click', async () => {
+    if (!driveConnected) { toast('Connect Drive first'); return; }
+    toast('Pushing to Drive…');
+    await driveUpload();
+    toast('Pushed to Drive ✓');
+  });
 }
 // ── END GOOGLE DRIVE SYNC ────────────────────────────────────────────────
 
