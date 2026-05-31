@@ -966,12 +966,21 @@ async function doSearch() {
   try {
     // Try PPT first (has prices), fall back to Pokemon TCG API
     let results = [];
-    if (settings.ppt_key) {
-      const r = await pptFetch(`/cards?search=${encodeURIComponent(q)}&limit=20`);
-      if (r.ok) {
-        const body = await r.json();
-        const list = Array.isArray(body) ? body : (body.data || []);
-        results = list.map(normalizePpt);
+    if (settings.ppt_key && settings.ppt_key.trim()) {
+      try {
+        const r = await pptFetch(`/cards?search=${encodeURIComponent(q)}&limit=20`);
+        if (r.ok) {
+          const body = await r.json();
+          const list = Array.isArray(body) ? body : (body.data || []);
+          results = list.map(normalizePpt);
+        } else {
+          const err = await r.json().catch(() => ({}));
+          if (r.status === 429) {
+            toast('PPT credits exhausted — showing TCGPlayer prices only');
+          }
+        }
+      } catch(e) {
+        console.warn('PPT search failed:', e.message);
       }
     }
     // Also search TCG API and merge (for cards PPT missed)
@@ -981,16 +990,20 @@ async function doSearch() {
         const tbody = await tr.json();
         const tcgCards = (tbody.data || []).map(c => {
           const prices = c.tcgplayer?.prices || {};
-          let market = null;
+          let market = null, low = null, updated = null;
           for (const v of Object.values(prices)) {
-            if (v?.market) { market = v.market; break; }
+            if (v?.market && !market) market = v.market;
+            if (v?.low && !low) low = v.low;
+            if (v?.updatedAt && !updated) updated = v.updatedAt;
           }
+          // TCGPlayer updated date
+          updated = updated || c.tcgplayer?.updatedAt || null;
           return {
             id: c.id, name: c.name,
             set: c.set?.name || '', number: c.number || '',
             rarity: c.rarity || '',
             image: c.images?.small || '', imageLarge: c.images?.large || '',
-            market, low: null, sellers: null, updated: null,
+            market, low, sellers: null, updated,
             tcgUrl: c.tcgplayer?.url || '',
             tcgPlayerId: null, source: 'tcg', raw: c
           };
@@ -1103,15 +1116,7 @@ function closeDetail() {
 
 document.getElementById('detail-backdrop').addEventListener('click', closeDetail);
 
-// Swipe down to close sheet
-let touchStartY = 0;
-document.getElementById('detail-content').addEventListener('touchstart', e => {
-  touchStartY = e.touches[0].clientY;
-}, { passive: true });
-document.getElementById('detail-content').addEventListener('touchend', e => {
-  const diff = e.changedTouches[0].clientY - touchStartY;
-  if (diff > 80) closeDetail(); // swipe down 80px closes
-}, { passive: true });
+// Swipe to close removed — use ✕ button instead
 
 function updatePsaVerdict(rawMarket) {
   const p10pct = Number(document.getElementById('d-psa-slider').value);
