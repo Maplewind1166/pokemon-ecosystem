@@ -801,7 +801,7 @@ html, body {
   <div id="detail-backdrop"></div>
   <div id="detail-content">
     <div class="sheet-handle"></div>
-    <button id="sheet-close-btn" onclick="closeDetail()" style="position:absolute;top:16px;right:16px;background:var(--subtle);border:none;border-radius:50%;width:32px;height:32px;font-size:16px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;">✕</button>
+    <button id="sheet-close-btn" style="position:absolute;top:16px;right:16px;background:var(--subtle);border:none;border-radius:50%;width:32px;height:32px;font-size:16px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;">✕</button>
     <img class="sheet-card-image" id="d-image" src="" alt="">
     <div class="sheet-name" id="d-name"></div>
     <div class="sheet-meta" id="d-meta"></div>
@@ -1021,6 +1021,12 @@ async function doSearch() {
       area.innerHTML = '<div class="status-msg"><span class="big">😕</span>No cards found.<br>Try a different name.</div>';
       return;
     }
+    // Sort: priced cards first
+    results.sort((a, b) => {
+      if (a.market && !b.market) return -1;
+      if (!a.market && b.market) return 1;
+      return (b.market || 0) - (a.market || 0);
+    });
     renderSearchResults(results, area);
   } catch(e) {
     area.innerHTML = `<div class="status-msg">Error: ${e.message}</div>`;
@@ -1115,7 +1121,7 @@ function closeDetail() {
 }
 
 document.getElementById('detail-backdrop').addEventListener('click', closeDetail);
-
+document.getElementById('sheet-close-btn').addEventListener('click', closeDetail);
 // Swipe to close removed — use ✕ button instead
 
 function updatePsaVerdict(rawMarket) {
