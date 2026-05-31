@@ -1082,10 +1082,11 @@ function openDetail(card, inVault) {
     psaSection.style.display = '';
     document.getElementById('d-psa-slider').value = 20;
     document.getElementById('d-psa-pct').textContent = '20%';
-    document.getElementById('d-psa-verdict').style.display = 'none';
+    // Show PSA verdict immediately on open at default 20%
     updatePsaVerdict(card.market);
   } else {
     psaSection.style.display = 'none';
+    document.getElementById('d-psa-verdict').style.display = 'none';
   }
 
   document.getElementById('detail-sheet').classList.add('open');
@@ -1099,33 +1100,6 @@ function closeDetail() {
 }
 
 document.getElementById('detail-backdrop').addEventListener('click', closeDetail);
-
-// Fair price checker
-document.getElementById('d-asking').addEventListener('input', () => {
-  const asking = parseFloat(document.getElementById('d-asking').value);
-  const market = currentDetailCard?.market;
-  const verdict = document.getElementById('d-fair-verdict');
-  if (!asking || !market) { verdict.style.display = 'none'; return; }
-  const pct = (asking / market - 1) * 100;
-  verdict.style.display = '';
-  verdict.className = 'fair-price-verdict';
-  if (pct <= -10) {
-    verdict.classList.add('good');
-    verdict.textContent = `✓ Great deal — ${Math.abs(pct).toFixed(0)}% below market ($${market.toFixed(2)})`;
-  } else if (pct <= 10) {
-    verdict.classList.add('fair');
-    verdict.textContent = `≈ Fair price — within 10% of market ($${market.toFixed(2)})`;
-  } else {
-    verdict.classList.add('high');
-    verdict.textContent = `✗ Overpriced — ${pct.toFixed(0)}% above market ($${market.toFixed(2)})`;
-  }
-});
-
-// PSA slider
-document.getElementById('d-psa-slider').addEventListener('input', function() {
-  document.getElementById('d-psa-pct').textContent = this.value + '%';
-  if (currentDetailCard?.market) updatePsaVerdict(currentDetailCard.market);
-});
 
 function updatePsaVerdict(rawMarket) {
   const p10pct = Number(document.getElementById('d-psa-slider').value);
@@ -1356,6 +1330,33 @@ document.getElementById('s-drive-connect-btn').addEventListener('click', driveCo
 document.getElementById('search-btn').addEventListener('click', doSearch);
 document.getElementById('search-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') doSearch();
+});
+
+// ── Fair price checker wiring ──────────────────────────────
+document.getElementById('d-asking').addEventListener('input', () => {
+  const asking = parseFloat(document.getElementById('d-asking').value);
+  const market = currentDetailCard?.market;
+  const verdict = document.getElementById('d-fair-verdict');
+  if (!asking || isNaN(asking) || !market) { verdict.style.display = 'none'; return; }
+  const pct = (asking / market - 1) * 100;
+  verdict.style.display = '';
+  verdict.className = 'fair-price-verdict';
+  if (pct <= -10) {
+    verdict.classList.add('good');
+    verdict.textContent = `✓ Great deal — ${Math.abs(pct).toFixed(0)}% below market ($${market.toFixed(2)})`;
+  } else if (pct <= 10) {
+    verdict.classList.add('fair');
+    verdict.textContent = `≈ Fair price — within 10% of market ($${market.toFixed(2)})`;
+  } else {
+    verdict.classList.add('high');
+    verdict.textContent = `✗ Overpriced — ${pct.toFixed(0)}% above market ($${market.toFixed(2)})`;
+  }
+});
+
+// ── PSA slider wiring ──────────────────────────────────────
+document.getElementById('d-psa-slider').addEventListener('input', function() {
+  document.getElementById('d-psa-pct').textContent = this.value + '%';
+  if (currentDetailCard?.market) updatePsaVerdict(currentDetailCard.market);
 });
 
 // ── Init ───────────────────────────────────────────────────
