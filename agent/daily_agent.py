@@ -341,13 +341,14 @@ def top_gains(vault: dict, n: int = 5) -> list[dict]:
         price = card.get("last_market_price")
         if not cost or cost <= 0 or price is None:
             continue
+        qty = card.get("quantity") or 1
         pct = (price - cost) / cost
         out.append({
             "name": card.get("name", "?"),
             "set": card.get("set", ""),
             "cost": cost,
             "price": price,
-            "gain": round(price - cost, 2),
+            "gain": round((price - cost) * qty, 2),
             "pct": pct,
         })
     out.sort(key=lambda x: -x["pct"])
@@ -398,7 +399,7 @@ def build_email(vault: dict, results: list[dict], wishlist_hits: list[dict], run
     cards = vault.get("cards", [])
     pokemon_cards = [c for c in cards if c.get("category") == "Pokemon"]
 
-    total_value = sum((c.get("last_market_price") or 0) for c in pokemon_cards)
+    total_value = sum((c.get("last_market_price") or 0) * (c.get("quantity") or 1) for c in pokemon_cards)
     total_cost  = sum((c.get("cost_basis") or 0) * (c.get("quantity") or 1) for c in pokemon_cards)
     total_pl    = total_value - total_cost
     pl_pct      = (total_pl / total_cost * 100) if total_cost > 0 else 0
